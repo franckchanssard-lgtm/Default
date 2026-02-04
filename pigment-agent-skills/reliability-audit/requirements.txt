@@ -7,9 +7,8 @@ numpy>=1.24.0
 # Configuration
 PyYAML>=6.0
 
-# Optional: API integration (future)
-# requests>=2.28.0
+# Web interface
+flask>=3.0.0
 
-# Optional: Advanced reporting (future)
-# jinja2>=3.1.0
-# plotly>=5.14.0
+# API integration
+requests>=2.28.0

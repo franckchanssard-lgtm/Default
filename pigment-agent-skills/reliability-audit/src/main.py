@@ -15,6 +15,9 @@ Options:
     --armset PATH       Path to ARMSET/UPMSET CSV
     --output-dir PATH   Output directory for reports
     --format FORMAT     Output format: csv, html, or all (default: all)
+    --web               Start web interface for CSV upload
+    --metadata-key KEY  Pigment Metadata API key for name enrichment
+    --audit-key KEY     Pigment Audit Logs API key
 """
 
 import argparse
@@ -140,8 +143,37 @@ Examples:
         action="store_true",
         help="Suppress console output"
     )
+    parser.add_argument(
+        "--web",
+        action="store_true",
+        help="Start web interface for CSV upload"
+    )
+    parser.add_argument(
+        "--metadata-key",
+        type=str,
+        default=None,
+        help="Pigment Metadata API key for name enrichment"
+    )
+    parser.add_argument(
+        "--audit-key",
+        type=str,
+        default=None,
+        help="Pigment Audit Logs API key"
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8080,
+        help="Port for web interface (default: 8080)"
+    )
 
     args = parser.parse_args()
+
+    # If --web flag, start web interface
+    if args.web:
+        from src.web import run_server
+        run_server(port=args.port)
+        return 0
 
     if not args.quiet:
         print_banner()
@@ -196,8 +228,15 @@ Examples:
     if not args.quiet:
         print("\n🔬 Running analysis...")
 
-    scorer = ReliabilityScorer(config)
+    scorer = ReliabilityScorer(
+        config,
+        metadata_api_key=args.metadata_key,
+        audit_api_key=args.audit_key
+    )
     score = scorer.score(data)
+
+    if score.enriched and not args.quiet:
+        print(f"   ✓ Enriched with {score.name_mappings_count} name mappings from API")
 
     if not args.quiet:
         print_score_summary(score)

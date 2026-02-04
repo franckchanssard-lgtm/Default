@@ -3,7 +3,7 @@ Scoring module for calculating overall reliability score.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import Dict, List, Optional
 from datetime import datetime
 
 from .config import Config
@@ -18,6 +18,7 @@ from .analyzers.performance_analyzer import PerformanceAnalysisResult
 from .analyzers.scoping_analyzer import ScopingAnalysisResult
 from .analyzers.complexity_analyzer import ComplexityAnalysisResult
 from .analyzers.workload_analyzer import WorkloadAnalysisResult
+from .api_client import MetadataAPIClient, AuditLogsAPIClient, APIEnricher
 
 
 @dataclass
@@ -47,13 +48,29 @@ class ReliabilityScore:
     # Top recommendations
     recommendations: List[str] = field(default_factory=list)
 
+    # API enrichment info
+    enriched: bool = False
+    name_mappings_count: int = 0
+
 
 class ReliabilityScorer:
     """Calculate overall reliability score from analysis results."""
 
-    def __init__(self, config: Config):
+    def __init__(
+        self,
+        config: Config,
+        metadata_api_key: Optional[str] = None,
+        audit_api_key: Optional[str] = None
+    ):
         self.config = config
         self.grades = config.grades
+
+        # Initialize API clients if keys provided
+        self.enricher: Optional[APIEnricher] = None
+        if metadata_api_key or audit_api_key:
+            metadata_client = MetadataAPIClient(metadata_api_key) if metadata_api_key else None
+            audit_client = AuditLogsAPIClient(audit_api_key) if audit_api_key else None
+            self.enricher = APIEnricher(metadata_client, audit_client)
 
     def score(self, data: PerformanceData) -> ReliabilityScore:
         """Run all analyzers and calculate overall score."""
@@ -78,6 +95,31 @@ class ReliabilityScorer:
         workload_analyzer = WorkloadAnalyzer(self.config)
         result.workload_result = workload_analyzer.analyze(data)
         result.views_score = result.workload_result.score
+
+        # Enrich findings with real names if API client available
+        if self.enricher:
+            try:
+                self.enricher.load_name_mapping()
+                result.name_mappings_count = len(self.enricher._name_mapping)
+
+                if result.name_mappings_count > 0:
+                    result.enriched = True
+
+                    # Enrich performance findings
+                    if result.performance_result and result.performance_result.findings:
+                        self.enricher.enrich_findings(result.performance_result.findings)
+
+                    # Enrich complexity findings
+                    if result.complexity_result and result.complexity_result.findings:
+                        self.enricher.enrich_findings(result.complexity_result.findings)
+
+                    # Enrich scoping findings
+                    if result.scoping_result and result.scoping_result.findings:
+                        self.enricher.enrich_findings(result.scoping_result.findings)
+
+                    print(f"Enriched findings with {result.name_mappings_count} name mappings")
+            except Exception as e:
+                print(f"Warning: API enrichment failed: {e}")
 
         # Calculate total score
         result.total_score = round(
