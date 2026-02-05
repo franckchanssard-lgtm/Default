@@ -9,6 +9,7 @@ from .workload_analyzer import WorkloadAnalyzer
 from .usage_analyzer import UsageAnalyzer
 from .version_analyzer import VersionAnalyzer
 from .permission_analyzer import PermissionAnalyzer
+from .access_rights_analyzer import AccessRightsAnalyzer
 
 __all__ = [
     "PerformanceAnalyzer",
@@ -18,4 +19,5 @@ __all__ = [
     "UsageAnalyzer",
     "VersionAnalyzer",
     "PermissionAnalyzer",
+    "AccessRightsAnalyzer",
 ]

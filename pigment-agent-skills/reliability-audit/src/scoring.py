@@ -16,6 +16,7 @@ from .analyzers import (
     UsageAnalyzer,
     VersionAnalyzer,
     PermissionAnalyzer,
+    AccessRightsAnalyzer,
 )
 from .analyzers.performance_analyzer import PerformanceAnalysisResult
 from .analyzers.scoping_analyzer import ScopingAnalysisResult
@@ -24,6 +25,7 @@ from .analyzers.workload_analyzer import WorkloadAnalysisResult
 from .analyzers.usage_analyzer import UsageAnalysisResult
 from .analyzers.version_analyzer import VersionAnalysisResult
 from .analyzers.permission_analyzer import PermissionAnalysisResult
+from .analyzers.access_rights_analyzer import AccessRightsAnalysisResult
 from .api_client import MetadataAPIClient, AuditLogsAPIClient, APIEnricher
 
 
@@ -53,6 +55,7 @@ class ReliabilityScore:
     usage_result: UsageAnalysisResult = None
     version_result: VersionAnalysisResult = None
     permission_result: PermissionAnalysisResult = None
+    access_rights_result: AccessRightsAnalysisResult = None
 
     # Top recommendations
     recommendations: List[str] = field(default_factory=list)
@@ -63,6 +66,7 @@ class ReliabilityScore:
     usage_analysis_enabled: bool = False
     version_analysis_enabled: bool = False
     permission_analysis_enabled: bool = False
+    access_rights_analysis_enabled: bool = False
 
 
 class ReliabilityScorer:
@@ -107,6 +111,22 @@ class ReliabilityScorer:
         workload_analyzer = WorkloadAnalyzer(self.config)
         result.workload_result = workload_analyzer.analyze(data)
         result.views_score = result.workload_result.score
+
+        # Run ARM/UPM analysis if data available
+        if data.has_armset:
+            try:
+                print("Running access rights (ARM/UPM) analysis...")
+                # Calculate total compute time for % calculation
+                total_compute_time = 0
+                if result.performance_result:
+                    total_compute_time = getattr(result.performance_result, 'total_execution_time_ms', 0)
+
+                access_rights_analyzer = AccessRightsAnalyzer(data.armset)
+                result.access_rights_result = access_rights_analyzer.analyze(total_compute_time)
+                result.access_rights_analysis_enabled = True
+                print(f"Access rights analysis complete: {result.access_rights_result.total_executions} executions analyzed")
+            except Exception as e:
+                print(f"Warning: Access rights analysis failed: {e}")
 
         # Enrich findings with real names if API client available
         if self.enricher:
@@ -366,6 +386,37 @@ class ReliabilityScorer:
                 )
 
             for rec in permission.recommendations[:2]:
+                if rec not in recommendations:
+                    recommendations.append(rec)
+
+        # Access rights (ARM/UPM) recommendations
+        access_rights = result.access_rights_result
+        if access_rights:
+            if access_rights.pct_time_in_security > 20:
+                recommendations.append(
+                    f"🔒 Security calculations consume {access_rights.pct_time_in_security:.0f}% of compute. "
+                    "Review ARM/UPM architecture for optimization."
+                )
+
+            if access_rights.slow_blocks:
+                slowest = access_rights.slow_blocks[0]
+                recommendations.append(
+                    f"⏱️ Security block '{slowest.block_name}' averages {slowest.avg_execution_time_ms/1000:.1f}s. "
+                    "Consider reducing dimensions in access rights metrics."
+                )
+
+            if access_rights.frequent_recalc_blocks:
+                recommendations.append(
+                    f"🔄 {len(access_rights.frequent_recalc_blocks)} security blocks recalculated frequently. "
+                    "Check for cascading access rights updates."
+                )
+
+            if access_rights.scoping_opportunity:
+                recommendations.append(
+                    "💡 Unscoped ARM/UPM executions detected. Enable scoping to reduce recalculation scope."
+                )
+
+            for rec in access_rights.recommendations[:2]:
                 if rec not in recommendations:
                     recommendations.append(rec)
 
