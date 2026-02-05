@@ -14,12 +14,16 @@ from .analyzers import (
     ComplexityAnalyzer,
     WorkloadAnalyzer,
     UsageAnalyzer,
+    VersionAnalyzer,
+    PermissionAnalyzer,
 )
 from .analyzers.performance_analyzer import PerformanceAnalysisResult
 from .analyzers.scoping_analyzer import ScopingAnalysisResult
 from .analyzers.complexity_analyzer import ComplexityAnalysisResult
 from .analyzers.workload_analyzer import WorkloadAnalysisResult
 from .analyzers.usage_analyzer import UsageAnalysisResult
+from .analyzers.version_analyzer import VersionAnalysisResult
+from .analyzers.permission_analyzer import PermissionAnalysisResult
 from .api_client import MetadataAPIClient, AuditLogsAPIClient, APIEnricher
 
 
@@ -47,6 +51,8 @@ class ReliabilityScore:
     complexity_result: ComplexityAnalysisResult = None
     workload_result: WorkloadAnalysisResult = None
     usage_result: UsageAnalysisResult = None
+    version_result: VersionAnalysisResult = None
+    permission_result: PermissionAnalysisResult = None
 
     # Top recommendations
     recommendations: List[str] = field(default_factory=list)
@@ -55,6 +61,8 @@ class ReliabilityScore:
     enriched: bool = False
     name_mappings_count: int = 0
     usage_analysis_enabled: bool = False
+    version_analysis_enabled: bool = False
+    permission_analysis_enabled: bool = False
 
 
 class ReliabilityScorer:
@@ -143,6 +151,27 @@ class ReliabilityScorer:
                     print(f"Usage analysis complete: {result.usage_result.total_events_analyzed} events analyzed")
                 except Exception as e:
                     print(f"Warning: Usage analysis failed: {e}")
+
+                # Run permission analysis
+                try:
+                    print("Running permission analysis from Audit Logs...")
+                    permission_analyzer = PermissionAnalyzer(self.enricher.audit_client)
+                    result.permission_result = permission_analyzer.analyze()
+                    result.permission_analysis_enabled = True
+                    print(f"Permission analysis complete: {result.permission_result.total_users} users analyzed")
+                except Exception as e:
+                    print(f"Warning: Permission analysis failed: {e}")
+
+            # Run version analysis if metadata client available
+            if self.enricher.metadata_client:
+                try:
+                    print("Running version dimension analysis...")
+                    version_analyzer = VersionAnalyzer(self.enricher.metadata_client)
+                    result.version_result = version_analyzer.analyze()
+                    result.version_analysis_enabled = True
+                    print(f"Version analysis complete: {result.version_result.total_versions} versions analyzed")
+                except Exception as e:
+                    print(f"Warning: Version analysis failed: {e}")
 
         # Calculate total score
         result.total_score = round(
@@ -290,5 +319,55 @@ class ReliabilityScorer:
                 if insight not in recommendations:
                     recommendations.append(insight)
 
-        # Limit to top 12 recommendations
-        return recommendations[:12]
+        # Version-based recommendations
+        version = result.version_result
+        if version:
+            if version.high_risk_dimensions > 0:
+                recommendations.append(
+                    f"📦 {version.high_risk_dimensions} version dimensions are high-risk. "
+                    "Too many versions impact calculation performance."
+                )
+
+            if len(version.archive_candidates) > 5:
+                recommendations.append(
+                    f"🗄️ {len(version.archive_candidates)} versions are >2 years old. "
+                    "Consider archiving to reduce data bloat."
+                )
+
+            if version.total_versions > 30:
+                recommendations.append(
+                    f"⚠️ {version.total_versions} total versions across workspace. "
+                    "Verify formulas don't use 'ALL Versions' without filters."
+                )
+
+            for rec in version.recommendations[:2]:
+                if rec not in recommendations:
+                    recommendations.append(rec)
+
+        # Permission-based recommendations
+        permission = result.permission_result
+        if permission:
+            if permission.high_risks > 0 or permission.medium_risks > 0:
+                recommendations.append(
+                    f"🔐 {permission.high_risks + permission.medium_risks} permission risks identified. "
+                    "Review access rights for security."
+                )
+
+            if len(permission.inactive_users) > 5:
+                recommendations.append(
+                    f"👻 {len(permission.inactive_users)} users inactive for >30 days. "
+                    "Consider revoking unused access."
+                )
+
+            if len(permission.admin_users) > 5:
+                recommendations.append(
+                    f"👑 {len(permission.admin_users)} admin users. "
+                    "Apply least-privilege principle."
+                )
+
+            for rec in permission.recommendations[:2]:
+                if rec not in recommendations:
+                    recommendations.append(rec)
+
+        # Limit to top 15 recommendations
+        return recommendations[:15]

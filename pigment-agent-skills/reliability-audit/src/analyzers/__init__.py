@@ -7,6 +7,8 @@ from .scoping_analyzer import ScopingAnalyzer
 from .complexity_analyzer import ComplexityAnalyzer
 from .workload_analyzer import WorkloadAnalyzer
 from .usage_analyzer import UsageAnalyzer
+from .version_analyzer import VersionAnalyzer
+from .permission_analyzer import PermissionAnalyzer
 
 __all__ = [
     "PerformanceAnalyzer",
@@ -14,4 +16,6 @@ __all__ = [
     "ComplexityAnalyzer",
     "WorkloadAnalyzer",
     "UsageAnalyzer",
+    "VersionAnalyzer",
+    "PermissionAnalyzer",
 ]

@@ -32,6 +32,28 @@ class Block:
 
 
 @dataclass
+class Dimension:
+    """Pigment Dimension metadata."""
+    id: str
+    name: str
+    dimension_type: str  # "standard", "time", "version", etc.
+    application_id: str
+    member_count: int = 0
+    is_version: bool = False
+
+
+@dataclass
+class DimensionMember:
+    """A member of a dimension (e.g., a version)."""
+    id: str
+    name: str
+    dimension_id: str
+    is_active: bool = True
+    created_at: Optional[str] = None
+    metadata: Dict = field(default_factory=dict)
+
+
+@dataclass
 class AuditEvent:
     """Pigment Audit Log event."""
     event_id: str
@@ -136,6 +158,79 @@ class MetadataAPIClient:
         except Exception as e:
             print(f"Warning: Could not fetch blocks for {application_id}: {e}")
             return []
+
+    def get_dimensions(self, application_id: str) -> List[Dimension]:
+        """Get all dimensions in an application."""
+        cache_key = f"dimensions_{application_id}"
+        if cache_key in self._cache:
+            return self._cache[cache_key]
+
+        try:
+            data = self._request("GET", f"/dimensions", params={"applicationId": application_id})
+            dimensions = []
+            for dim in data.get("dimensions", []):
+                dim_type = dim.get("type", "standard").lower()
+                dimensions.append(Dimension(
+                    id=dim.get("id", ""),
+                    name=dim.get("name", ""),
+                    dimension_type=dim_type,
+                    application_id=application_id,
+                    member_count=dim.get("memberCount", 0),
+                    is_version=dim_type == "version" or "version" in dim.get("name", "").lower()
+                ))
+            self._cache[cache_key] = dimensions
+            return dimensions
+        except Exception as e:
+            print(f"Warning: Could not fetch dimensions for {application_id}: {e}")
+            return []
+
+    def get_dimension_members(self, dimension_id: str) -> List[DimensionMember]:
+        """Get all members of a dimension."""
+        cache_key = f"members_{dimension_id}"
+        if cache_key in self._cache:
+            return self._cache[cache_key]
+
+        try:
+            data = self._request("GET", f"/dimensions/{dimension_id}/members")
+            members = [
+                DimensionMember(
+                    id=member.get("id", ""),
+                    name=member.get("name", ""),
+                    dimension_id=dimension_id,
+                    is_active=member.get("isActive", True),
+                    created_at=member.get("createdAt"),
+                    metadata=member.get("metadata", {})
+                )
+                for member in data.get("members", [])
+            ]
+            self._cache[cache_key] = members
+            return members
+        except Exception as e:
+            print(f"Warning: Could not fetch members for dimension {dimension_id}: {e}")
+            return []
+
+    def get_version_dimensions(self) -> List[Dict]:
+        """Get all version dimensions across all applications with their members."""
+        version_dims = []
+
+        apps = self.get_applications()
+        for app in apps:
+            dimensions = self.get_dimensions(app.id)
+            for dim in dimensions:
+                if dim.is_version:
+                    members = self.get_dimension_members(dim.id)
+                    version_dims.append({
+                        "application_id": app.id,
+                        "application_name": app.name,
+                        "dimension_id": dim.id,
+                        "dimension_name": dim.name,
+                        "member_count": len(members),
+                        "members": members,
+                        "active_count": len([m for m in members if m.is_active]),
+                        "inactive_count": len([m for m in members if not m.is_active])
+                    })
+
+        return version_dims
 
     def build_name_mapping(self) -> Dict[str, str]:
         """Build a mapping of IDs to names for enrichment."""
