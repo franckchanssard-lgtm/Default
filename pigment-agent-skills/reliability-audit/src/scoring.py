@@ -13,11 +13,13 @@ from .analyzers import (
     ScopingAnalyzer,
     ComplexityAnalyzer,
     WorkloadAnalyzer,
+    UsageAnalyzer,
 )
 from .analyzers.performance_analyzer import PerformanceAnalysisResult
 from .analyzers.scoping_analyzer import ScopingAnalysisResult
 from .analyzers.complexity_analyzer import ComplexityAnalysisResult
 from .analyzers.workload_analyzer import WorkloadAnalysisResult
+from .analyzers.usage_analyzer import UsageAnalysisResult
 from .api_client import MetadataAPIClient, AuditLogsAPIClient, APIEnricher
 
 
@@ -44,6 +46,7 @@ class ReliabilityScore:
     scoping_result: ScopingAnalysisResult = None
     complexity_result: ComplexityAnalysisResult = None
     workload_result: WorkloadAnalysisResult = None
+    usage_result: UsageAnalysisResult = None
 
     # Top recommendations
     recommendations: List[str] = field(default_factory=list)
@@ -51,6 +54,7 @@ class ReliabilityScore:
     # API enrichment info
     enriched: bool = False
     name_mappings_count: int = 0
+    usage_analysis_enabled: bool = False
 
 
 class ReliabilityScorer:
@@ -120,6 +124,25 @@ class ReliabilityScorer:
                     print(f"Enriched findings with {result.name_mappings_count} name mappings")
             except Exception as e:
                 print(f"Warning: API enrichment failed: {e}")
+
+            # Run usage analysis if audit client available
+            if self.enricher.audit_client:
+                try:
+                    print("Running usage analysis from Audit Logs...")
+                    usage_analyzer = UsageAnalyzer(self.enricher.audit_client)
+
+                    # Build performance data map for correlation
+                    perf_data = {}
+                    if result.workload_result and hasattr(result.workload_result, 'view_stats'):
+                        for view_id, stats in getattr(result.workload_result, 'view_stats', {}).items():
+                            if hasattr(stats, 'avg_render_time_ms'):
+                                perf_data[view_id] = stats.avg_render_time_ms
+
+                    result.usage_result = usage_analyzer.analyze(perf_data if perf_data else None)
+                    result.usage_analysis_enabled = True
+                    print(f"Usage analysis complete: {result.usage_result.total_events_analyzed} events analyzed")
+                except Exception as e:
+                    print(f"Warning: Usage analysis failed: {e}")
 
         # Calculate total score
         result.total_score = round(
@@ -226,5 +249,46 @@ class ReliabilityScorer:
                 "Prioritize addressing critical issues before adding new features."
             )
 
-        # Limit to top 10 recommendations
-        return recommendations[:10]
+        # Usage-based recommendations (from Audit Logs)
+        usage = result.usage_result
+        if usage:
+            # Critical paths
+            if usage.critical_paths:
+                critical_count = len([p for p in usage.critical_paths if p.priority == "critical"])
+                if critical_count > 0:
+                    recommendations.append(
+                        f"🎯 {critical_count} critical paths identified from usage analysis. "
+                        "See Critical Paths section for optimization priorities."
+                    )
+
+            # Slow popular boards
+            if usage.slow_popular_boards:
+                top_board = usage.slow_popular_boards[0]
+                recommendations.append(
+                    f"🔥 Board '{top_board.board_name}' is slow ({top_board.avg_load_time_ms/1000:.1f}s) "
+                    f"but heavily used ({top_board.view_count} views by {top_board.unique_users} users). "
+                    "Prioritize optimization."
+                )
+
+            # Power users doing imports
+            importers = [u for u in usage.power_users if u.import_actions > 0]
+            if importers:
+                recommendations.append(
+                    f"👤 {len(importers)} power users perform imports. "
+                    "Interview them to understand critical workflows and pain points."
+                )
+
+            # Recent formula changes
+            if len(usage.recent_formula_changes) > 5:
+                recommendations.append(
+                    f"📝 {len(usage.recent_formula_changes)} recent formula changes. "
+                    "Check if performance degradation correlates with recent modifications."
+                )
+
+            # Add usage insights
+            for insight in usage.insights[:3]:
+                if insight not in recommendations:
+                    recommendations.append(insight)
+
+        # Limit to top 12 recommendations
+        return recommendations[:12]
