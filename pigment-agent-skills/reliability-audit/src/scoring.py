@@ -17,6 +17,7 @@ from .analyzers import (
     VersionAnalyzer,
     PermissionAnalyzer,
     AccessRightsAnalyzer,
+    DataQualityAnalyzer,
 )
 from .analyzers.performance_analyzer import PerformanceAnalysisResult
 from .analyzers.scoping_analyzer import ScopingAnalysisResult
@@ -26,6 +27,7 @@ from .analyzers.usage_analyzer import UsageAnalysisResult
 from .analyzers.version_analyzer import VersionAnalysisResult
 from .analyzers.permission_analyzer import PermissionAnalysisResult
 from .analyzers.access_rights_analyzer import AccessRightsAnalysisResult
+from .analyzers.data_quality_analyzer import DataQualityResult
 from .api_client import MetadataAPIClient, AuditLogsAPIClient, APIEnricher
 
 
@@ -56,6 +58,7 @@ class ReliabilityScore:
     version_result: VersionAnalysisResult = None
     permission_result: PermissionAnalysisResult = None
     access_rights_result: AccessRightsAnalysisResult = None
+    data_quality_result: DataQualityResult = None
 
     # Top recommendations
     recommendations: List[str] = field(default_factory=list)
@@ -67,6 +70,11 @@ class ReliabilityScore:
     version_analysis_enabled: bool = False
     permission_analysis_enabled: bool = False
     access_rights_analysis_enabled: bool = False
+    data_quality_analysis_enabled: bool = False
+
+    # Trust score (from data quality analysis)
+    trust_score: float = 0.0
+    trust_level: str = "unknown"
 
 
 class ReliabilityScorer:
@@ -127,6 +135,19 @@ class ReliabilityScorer:
                 print(f"Access rights analysis complete: {result.access_rights_result.total_executions} executions analyzed")
             except Exception as e:
                 print(f"Warning: Access rights analysis failed: {e}")
+
+        # Run data quality analysis
+        if data.has_executions:
+            try:
+                print("Running data quality & process reliability analysis...")
+                data_quality_analyzer = DataQualityAnalyzer(data.executions)
+                result.data_quality_result = data_quality_analyzer.analyze()
+                result.data_quality_analysis_enabled = True
+                result.trust_score = result.data_quality_result.overall_trust_score
+                result.trust_level = result.data_quality_result.trust_level
+                print(f"Data quality analysis complete: Trust score {result.trust_score}/100 ({result.trust_level})")
+            except Exception as e:
+                print(f"Warning: Data quality analysis failed: {e}")
 
         # Enrich findings with real names if API client available
         if self.enricher:
@@ -420,5 +441,47 @@ class ReliabilityScorer:
                 if rec not in recommendations:
                     recommendations.append(rec)
 
-        # Limit to top 15 recommendations
-        return recommendations[:15]
+        # Data quality & process reliability recommendations
+        dq = result.data_quality_result
+        if dq:
+            # Critical issues first
+            for issue in dq.critical_issues[:2]:
+                if issue not in recommendations:
+                    recommendations.insert(0, issue)  # Insert at beginning
+
+            if dq.trust_level in ["low", "critical"]:
+                recommendations.append(
+                    f"⚠️ Trust level is {dq.trust_level.upper()} ({dq.overall_trust_score:.0f}/100). "
+                    "Data reliability issues detected - review before using for decisions."
+                )
+
+            if dq.stale_metrics > 10:
+                recommendations.append(
+                    f"📅 {dq.stale_metrics + dq.very_stale_metrics} metrics are stale. "
+                    "Check data pipelines and refresh schedules."
+                )
+
+            if dq.execution_time_trend == "degrading":
+                recommendations.append(
+                    f"📉 Performance degrading {dq.week_over_week_change_pct:.0f}% week-over-week. "
+                    "Investigate recent changes."
+                )
+
+            if dq.highly_unstable_metrics > 10:
+                recommendations.append(
+                    f"📊 {dq.highly_unstable_metrics} metrics have unpredictable execution times. "
+                    "Check for data-dependent formulas."
+                )
+
+            if len(dq.missing_batch_days) > 3:
+                recommendations.append(
+                    f"🔄 Batch jobs missing for {len(dq.missing_batch_days)} days. "
+                    "Check scheduler and error logs."
+                )
+
+            for rec in dq.recommendations[:2]:
+                if rec not in recommendations:
+                    recommendations.append(rec)
+
+        # Limit to top 18 recommendations
+        return recommendations[:18]
