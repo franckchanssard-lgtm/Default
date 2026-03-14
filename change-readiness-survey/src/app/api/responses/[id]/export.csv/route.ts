@@ -19,7 +19,7 @@ export async function GET(
     const answers: Answers = response.answers_json
       ? JSON.parse(response.answers_json)
       : {};
-    const hasAnswers = Object.keys(answers).length === 15;
+    const hasAnswers = Object.keys(answers).length === QUESTIONS.length;
     const scores = hasAnswers ? computeScores(answers) : null;
 
     // Build CSV
@@ -58,6 +58,33 @@ export async function GET(
       }
       rows.push([]);
       rows.push(["Overall Score", String(scores.overall), scores.overallTrafficLight]);
+      rows.push([]);
+
+      // Gating Warnings
+      if (scores.gatingWarnings.length > 0) {
+        rows.push(["Gating Warnings"]);
+        for (const w of scores.gatingWarnings) {
+          rows.push([w]);
+        }
+        rows.push([]);
+      }
+
+      // Risks
+      if (scores.risks.length > 0) {
+        rows.push(["Top Risks"]);
+        for (const r of scores.risks) {
+          rows.push([r]);
+        }
+        rows.push([]);
+      }
+
+      // Recommendations
+      if (scores.recommendations.length > 0) {
+        rows.push(["Recommendations"]);
+        for (const r of scores.recommendations) {
+          rows.push([r]);
+        }
+      }
     }
 
     const csv = rows

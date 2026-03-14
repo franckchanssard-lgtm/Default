@@ -26,10 +26,18 @@ export default function Home() {
     setError("");
 
     try {
+      const trimmedForm = {
+        company_name: form.company_name.trim(),
+        project_name: form.project_name.trim(),
+        go_live_date: form.go_live_date,
+        respondent_role: form.respondent_role.trim(),
+        respondent_email: form.respondent_email.trim(),
+      };
+
       const res = await fetch("/api/responses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(trimmedForm),
       });
 
       if (!res.ok) {
