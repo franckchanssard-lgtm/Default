@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getResponse } from "@/lib/db";
 import { computeScores } from "@/lib/scoring";
+import { QUESTIONS } from "@/lib/questionnaire";
 import { Answers } from "@/lib/types";
 
 export async function GET(
@@ -19,7 +20,7 @@ export async function GET(
       ? JSON.parse(response.answers_json)
       : {};
 
-    const hasAnswers = Object.keys(answers).length === 15;
+    const hasAnswers = Object.keys(answers).length === QUESTIONS.length;
     const scores = hasAnswers ? computeScores(answers) : null;
 
     return NextResponse.json({

@@ -112,7 +112,7 @@ export default function ResultsPage({
             {data.company_name} — {data.project_name}
           </h1>
           <p className="text-gray-400 text-sm">
-            Completed {new Date(data.created_at).toLocaleDateString()}
+            Submitted {new Date(data.created_at).toLocaleDateString()}
             {data.respondent_role && ` · ${data.respondent_role}`}
           </p>
         </div>
@@ -242,7 +242,7 @@ export default function ResultsPage({
                     {q.text}
                   </span>
                   <span className="font-bold whitespace-nowrap">
-                    {val}/5
+                    {val !== undefined ? `${val}/5` : "—"}
                   </span>
                 </div>
               );

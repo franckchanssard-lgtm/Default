@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, use } from "react";
+import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { QUESTIONS, DIMENSIONS } from "@/lib/questionnaire";
 
 const LIKERT_OPTIONS = [
@@ -23,6 +24,17 @@ export default function SurveyPage({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showValidation, setShowValidation] = useState(false);
+  const [validId, setValidId] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/responses/${id}`)
+      .then((res) => {
+        if (!res.ok) throw new Error("Not found");
+        return res.json();
+      })
+      .then(() => setValidId(true))
+      .catch(() => setValidId(false));
+  }, [id]);
 
   const answeredCount = Object.keys(answers).length;
   const totalCount = QUESTIONS.length;
@@ -70,6 +82,33 @@ export default function SurveyPage({
       setLoading(false);
     }
   };
+
+  if (validId === null) {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        <p className="text-gray-500">Loading survey...</p>
+      </main>
+    );
+  }
+
+  if (validId === false) {
+    return (
+      <main className="min-h-screen flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-lg p-8 text-center max-w-md">
+          <h1 className="text-xl font-bold mb-2">Survey Not Found</h1>
+          <p className="text-gray-500 mb-4">
+            This survey link is invalid or has expired.
+          </p>
+          <Link
+            href="/"
+            className="text-[var(--primary)] hover:underline font-medium"
+          >
+            Start a new survey
+          </Link>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen py-8 px-4">
@@ -170,13 +209,21 @@ export default function SurveyPage({
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-[var(--primary)] hover:bg-[var(--primary-dark)] text-white font-medium py-3 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
-          >
-            {loading ? "Submitting..." : "Submit & View Results →"}
-          </button>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Link
+              href="/"
+              className="sm:w-auto bg-white border border-gray-300 text-gray-700 font-medium py-3 px-6 rounded-lg text-center hover:bg-gray-50 transition-colors"
+            >
+              ← Back
+            </Link>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 bg-[var(--primary)] hover:bg-[var(--primary-dark)] text-white font-medium py-3 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+            >
+              {loading ? "Submitting..." : "Submit & View Results →"}
+            </button>
+          </div>
         </form>
       </div>
     </main>
