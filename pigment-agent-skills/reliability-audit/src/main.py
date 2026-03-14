@@ -55,20 +55,33 @@ def print_score_summary(score):
         "F": "\033[91m",  # Red
     }
     reset = "\033[0m"
-    color = grade_colors.get(score.grade, "")
+    perf_color = grade_colors.get(score.grade, "")
+    comb_color = grade_colors.get(score.combined_grade, "")
+
+    combined = score.combined_reliability_score
+    combined_str = str(int(combined)) if combined == int(combined) else f"{combined:.1f}"
 
     print("\n" + "=" * 60)
     print("                    RELIABILITY SCORE")
     print("=" * 60)
     print(f"""
-    Total Score:    {color}{score.total_score}/100 (Grade: {score.grade}){reset}
+    Performance Score:  {perf_color}{score.total_score}/100  (Grade: {score.grade}){reset}
+    Trust Score:        {score.trust_score}/100  (Level: {score.trust_level})
+    Combined Score:     {comb_color}{combined_str}/100  (Grade: {score.combined_grade}){reset}
 
-    Breakdown:
+    Sub-scores (each out of 25):
     ├── Performance:   {score.performance_score}/25
     ├── Optimization:  {score.optimization_score}/25
     ├── Complexity:    {score.complexity_score}/25
     └── Views:         {score.views_score}/25
     """)
+
+    if score.reliability_warnings:
+        print("⚠️  Reliability Warnings:")
+        print("-" * 60)
+        for w in score.reliability_warnings:
+            print(f"  • {w}")
+        print()
 
     if score.recommendations:
         print("Top Recommendations:")
@@ -215,6 +228,13 @@ Examples:
 
     if not data.has_executions and not data.has_views:
         print("❌ Error: No data loaded. Please check your CSV file paths.")
+        print()
+        print("   To run with the built-in demo dataset:")
+        print("     ./run_demo.sh")
+        print()
+        print("   To use the interactive web interface (upload CSVs in-browser):")
+        print("     python -m src.main --web")
+        print("     # or: ./run_web.sh")
         sys.exit(1)
 
     if not args.quiet:

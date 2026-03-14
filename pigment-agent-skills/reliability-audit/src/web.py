@@ -6,7 +6,7 @@ Opens a local web server with CSV upload capability.
 """
 
 import os
-import json
+import shutil
 import tempfile
 from pathlib import Path
 from datetime import datetime
@@ -26,12 +26,12 @@ _MAX_STORED_REPORTS = 20
 uploaded_data = {}
 
 
-def _store_report(report_id, payload):
-    """Store report data, evicting the oldest entry when cap is reached."""
+def _store_report(report_id: str, files: list):
+    """Store generated report file paths, evicting the oldest entry when cap is reached."""
     if len(uploaded_data) >= _MAX_STORED_REPORTS:
         oldest_key = next(iter(uploaded_data))
         uploaded_data.pop(oldest_key, None)
-    uploaded_data[report_id] = payload
+    uploaded_data[report_id] = files
 
 
 HTML_TEMPLATE = """
@@ -423,9 +423,24 @@ HTML_TEMPLATE = """
             });
         });
 
+        // If user uploads a real file while demo mode is active, exit demo mode and
+        // clear the visual state of demo-only zones so the UI stays coherent.
+        function clearDemoMode() {
+            if (!uploadedFiles['__demo__']) return;
+            delete uploadedFiles['__demo__'];
+            ['executions', 'views', 'armset'].forEach(t => {
+                if (!uploadedFiles[t]) {
+                    document.getElementById(t + '-zone').classList.remove('uploaded');
+                    document.getElementById(t + '-filename').textContent = '';
+                    document.getElementById(t + '-info').textContent = '';
+                }
+            });
+        }
+
         function handleUpload(input, type) {
             const file = input.files[0];
             if (!file) return;
+            clearDemoMode();
             uploadedFiles[type] = file;
 
             document.getElementById(type + '-zone').classList.add('uploaded');
@@ -435,8 +450,10 @@ HTML_TEMPLATE = """
             updateRunButton();
         }
 
+        // Button is enabled when an executions file is ready (real or demo).
         function updateRunButton() {
-            document.getElementById('run-btn').disabled = !uploadedFiles.executions;
+            document.getElementById('run-btn').disabled =
+                !uploadedFiles.executions && !uploadedFiles['__demo__'];
         }
 
         function toggleApiFields() {
@@ -455,21 +472,23 @@ HTML_TEMPLATE = """
                 const info = await resp.json();
 
                 if (!info.available) {
-                    alert('Demo data files not found on server. Please generate them first:\\n\\npython demo-data/generate_demo.py');
+                    alert('Demo data files not found on server.\\n\\nGenerate them first by running from the reliability-audit/ directory:\\n  python demo-data/generate_demo.py');
                     return;
                 }
 
-                // Mark all three zones as loaded (server will use paths directly)
+                // Clear any previously uploaded real files
+                delete uploadedFiles.executions;
+                delete uploadedFiles.views;
+                delete uploadedFiles.armset;
+
+                // Mark all three zones as loaded (server reads the files directly)
                 markZoneLoaded('executions', info.executions_name, info.executions_size);
                 if (info.views_name)  markZoneLoaded('views',  info.views_name,  info.views_size);
                 if (info.armset_name) markZoneLoaded('armset', info.armset_name, info.armset_size);
 
-                // Signal JS that demo mode is active
+                // Signal that demo mode is active
                 uploadedFiles['__demo__'] = true;
-                delete uploadedFiles.executions;   // will not be sent as file
-
                 updateRunButton();
-                document.getElementById('run-btn').disabled = false;
             } finally {
                 btn.textContent = '⚡ Load Demo Data';
                 btn.disabled = false;
@@ -484,17 +503,21 @@ HTML_TEMPLATE = """
 
         // ── Run audit ────────────────────────────────────────────────────────
         async function runAudit() {
+            const runBtn     = document.getElementById('run-btn');
             const resultsDiv = document.getElementById('results');
             const loading    = document.getElementById('loading');
             const content    = document.getElementById('results-content');
             const errorDiv   = document.getElementById('error-message');
+
+            // Disable button for the duration of the request
+            runBtn.disabled = true;
+            runBtn.textContent = '⏳ Analyzing…';
 
             resultsDiv.classList.add('show');
             loading.style.display = 'block';
             content.style.display = 'none';
             errorDiv.style.display = 'none';
 
-            // Scroll to results
             resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
             let url, init;
@@ -534,6 +557,9 @@ HTML_TEMPLATE = """
                 content.style.display = 'block';
                 errorDiv.textContent = 'Error running audit: ' + err.message;
                 errorDiv.style.display = 'block';
+            } finally {
+                runBtn.textContent = '🚀 Run Reliability Audit';
+                updateRunButton();   // re-enable if files still ready
             }
         }
 
@@ -565,8 +591,10 @@ HTML_TEMPLATE = """
             const gradeEl = document.getElementById('grade-circle');
             gradeEl.textContent = r.combined_grade || r.grade;
             gradeEl.className   = 'grade-circle grade-' + (r.combined_grade || r.grade);
+            const cScore = r.combined_reliability_score !== undefined
+                ? r.combined_reliability_score : r.total_score;
             document.getElementById('combined-score').textContent =
-                r.combined_reliability_score !== undefined ? r.combined_reliability_score : r.total_score;
+                Number.isInteger(cScore) ? cScore : cScore.toFixed(1);
 
             // Pillars (each score is 0-25; we normalize to 0-100)
             const pillars = [
@@ -655,7 +683,8 @@ def _run_audit_from_paths(executions_path, views_path=None, armset_path=None,
     report_id = datetime.now().strftime("%Y%m%d_%H%M%S")
     files = generator.generate(score)
 
-    _store_report(report_id, {'files': files, 'score': score})
+    # Only store file paths — not the score object (which holds large DataFrames)
+    _store_report(report_id, files)
 
     return {
         'report_id': report_id,
@@ -692,15 +721,15 @@ def index():
 
 @app.route('/api/audit', methods=['POST'])
 def run_audit():
+    if 'executions' not in request.files:
+        return jsonify({'error': 'Executions CSV is required'}), 400
+
+    executions_file = request.files['executions']
+    views_file  = request.files.get('views')
+    armset_file = request.files.get('armset')
+
+    temp_dir = tempfile.mkdtemp()
     try:
-        if 'executions' not in request.files:
-            return jsonify({'error': 'Executions CSV is required'}), 400
-
-        executions_file = request.files['executions']
-        views_file  = request.files.get('views')
-        armset_file = request.files.get('armset')
-
-        temp_dir = tempfile.mkdtemp()
         executions_path = os.path.join(temp_dir, 'executions.csv')
         executions_file.save(executions_path)
 
@@ -726,6 +755,10 @@ def run_audit():
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+    finally:
+        # Uploaded CSVs are no longer needed once the audit has run.
+        # Reports were written to the permanent output/ directory.
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 @app.route('/api/demo-check')
@@ -783,9 +816,10 @@ def download_html():
     report_id = request.args.get('id')
     if report_id not in uploaded_data:
         return 'Report not found', 404
-    html_files = [f for f in uploaded_data[report_id]['files'] if f.endswith('.html')]
+    files = uploaded_data[report_id]
+    html_files = [f for f in files if f.endswith('.html') and Path(f).exists()]
     if html_files:
-        return send_file(html_files[0])
+        return send_file(html_files[0], mimetype='text/html')
     return 'HTML report not found', 404
 
 
@@ -794,8 +828,9 @@ def download_csv():
     report_id = request.args.get('id')
     if report_id not in uploaded_data:
         return 'Report not found', 404
-    csv_files = [f for f in uploaded_data[report_id]['files']
-                 if 'summary' in f and f.endswith('.csv')]
+    files = uploaded_data[report_id]
+    csv_files = [f for f in files
+                 if 'summary' in f and f.endswith('.csv') and Path(f).exists()]
     if csv_files:
         return send_file(csv_files[0], as_attachment=True)
     return 'CSV report not found', 404
