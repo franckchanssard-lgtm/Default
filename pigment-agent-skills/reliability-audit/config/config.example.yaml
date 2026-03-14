@@ -1,0 +1,48 @@
+# Pigment Reliability Audit - Configuration
+# Copy this file to config.yaml and fill in your values
+
+# Data sources
+data_sources:
+  # CSV files (relative to reliability-audit folder or absolute paths)
+  executions_csv: "sample-data/Executions_anonymized_basic.csv"
+  views_csv: "sample-data/Views_Executions_anonymized_basic.csv"
+  armset_csv: "sample-data/Armset_Upmset_Executions_anonymized_basic.csv"
+
+# API Configuration (optional - for enrichment)
+api:
+  # Base URL for Pigment API
+  base_url: "https://pigment.app/api"
+
+  # API Keys (leave empty if not using)
+  metadata_api_key: ""
+  audit_logs_api_key: ""
+  export_api_key: ""
+
+# Output configuration
+output:
+  # Output directory (relative to reliability-audit folder)
+  directory: "output"
+
+  # Report formats to generate
+  formats:
+    - csv
+    - html
+
+  # Include detailed findings in report
+  include_details: true
+
+  # Maximum findings per category in report
+  max_findings_per_category: 50
+
+# Filters (optional)
+filters:
+  # Filter by application IDs (empty = all)
+  applications: []
+
+  # Filter by date range (empty = all)
+  date_from: ""
+  date_to: ""
+
+  # Exclude specific metrics/apps from analysis
+  exclude_applications: []
+  exclude_metrics: []

@@ -1,0 +1,47 @@
+# Pigment Reliability Audit - Thresholds Configuration
+# Adjust these values based on your workspace characteristics
+
+# Performance thresholds (in milliseconds)
+performance:
+  metric_execution:
+    watch: 3000      # > 3s: worth monitoring
+    warning: 5000    # > 5s: needs attention
+    critical: 30000  # > 30s: critical issue
+
+  view_render:
+    watch: 2000      # > 2s: worth monitoring
+    warning: 3000    # > 3s: needs attention
+    critical: 15000  # > 15s: critical issue
+
+# Computed rows thresholds
+computed_rows:
+  watch: 500000      # > 500K rows
+  warning: 1000000   # > 1M rows
+  critical: 10000000 # > 10M rows
+
+# Dimensional complexity thresholds
+dimensions:
+  watch: 5           # > 5 dimensions
+  warning: 6         # > 6 dimensions
+  critical: 10       # > 10 dimensions
+
+# Scoping optimization targets
+scoping:
+  fully_scoped_target: 50    # % of metrics that should be FullyScoped
+  non_scoped_warning: 30     # % non-scoped triggers warning
+  non_scoped_critical: 50    # % non-scoped triggers critical
+
+# Scoring weights (must sum to 100)
+scoring:
+  performance_weight: 25
+  optimization_weight: 25
+  complexity_weight: 25
+  views_weight: 25
+
+# Grade thresholds
+grades:
+  A: 90
+  B: 75
+  C: 60
+  D: 40
+  # Below D threshold = F
