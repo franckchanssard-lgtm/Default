@@ -42,7 +42,9 @@ class ScopingAnalysisResult:
     no_change_pct: float = 0.0
 
     # Time impact
+    total_formula_time_ms: float = 0.0
     no_change_total_time_ms: float = 0.0
+    no_change_time_pct: float = 0.0  # % of total formula time in NoChange
     potential_savings_ms: float = 0.0
 
     # Optimization candidates
@@ -76,6 +78,7 @@ class ScopingAnalyzer:
             return result
 
         result.total_formula_executions = len(formula_df)
+        result.total_formula_time_ms = formula_df["execution_time"].sum()
 
         # Count by scoped level
         scoped_counts = formula_df["scoped_level"].value_counts()
@@ -109,8 +112,15 @@ class ScopingAnalyzer:
         if len(no_change_df) > 0:
             result.no_change_total_time_ms = no_change_df["execution_time"].sum()
 
-            # Estimate potential savings (assume 50% reduction if scoped)
-            result.potential_savings_ms = result.no_change_total_time_ms * 0.5
+            # Time-weighted NoChange ratio: the relevant signal is not how many
+            # executions are unscoped, but how much compute time they consume.
+            if result.total_formula_time_ms > 0:
+                result.no_change_time_pct = round(
+                    result.no_change_total_time_ms / result.total_formula_time_ms * 100, 1
+                )
+
+            # Estimate potential savings (conservative 40% reduction if scoped)
+            result.potential_savings_ms = result.no_change_total_time_ms * 0.4
 
             # Group by metric and find top candidates
             metric_stats = no_change_df.groupby(
@@ -146,32 +156,39 @@ class ScopingAnalyzer:
         return result
 
     def _calculate_score(self, result: ScopingAnalysisResult) -> float:
-        """Calculate scoping optimization score (0-25 points)."""
+        """Calculate scoping optimization score (0-25 points).
+
+        Scoring is time-weighted: what matters is how much compute time is
+        wasted on unscoped formulas, not how many executions are unscoped.
+        A fast NoChange metric (< 1s) is not a problem; a slow one (10s) is.
+        """
 
         max_score = self.config.scoring.optimization_weight
 
-        # Score based on fully scoped percentage
         if result.total_formula_executions == 0:
             return max_score  # No data = no issues
 
-        # Target is to have high scoping rate
-        scoped_pct = result.fully_scoped_pct + (result.partially_scoped_pct * 0.5)
+        # Primary signal: time-weighted scoping effectiveness
+        # fully_scoped time = total - no_change - partially_scoped*0.5
+        # Use no_change_time_pct as the main penalty driver
+        no_change_time_pct = result.no_change_time_pct
 
-        if scoped_pct >= 70:
+        if no_change_time_pct <= 10:
             score = max_score
-        elif scoped_pct >= 50:
-            score = max_score * 0.8
-        elif scoped_pct >= 30:
-            score = max_score * 0.6
-        elif scoped_pct >= 10:
-            score = max_score * 0.4
+        elif no_change_time_pct <= 25:
+            score = max_score * 0.85
+        elif no_change_time_pct <= 50:
+            score = max_score * 0.65
+        elif no_change_time_pct <= 75:
+            score = max_score * 0.45
         else:
-            score = max_score * 0.2
+            score = max_score * 0.25
 
-        # Penalty if too many NoChange executions
-        if result.no_change_pct > self.thresholds.non_scoped_critical:
-            score *= 0.7
-        elif result.no_change_pct > self.thresholds.non_scoped_warning:
-            score *= 0.85
+        # Secondary signal: execution-count scoping rate as a cross-check
+        # A high count-based NoChange with low time impact = minor deduction only
+        scoped_pct = result.fully_scoped_pct + (result.partially_scoped_pct * 0.5)
+        if scoped_pct < 30 and no_change_time_pct < 25:
+            # Many unscoped but fast — mild penalty
+            score *= 0.9
 
         return round(score, 1)

@@ -453,35 +453,64 @@ class DataQualityAnalyzer:
                 result.weekend_executions_pct = weekend / len(valid_times) * 100
 
         # Find missing batch days (if there's a pattern of daily batches)
-        if 'day' in df.columns and result.batch_ratio > 0.3:  # Significant batch activity
-            days = df['day'].dropna().dt.date.unique()
-            if len(days) > 7:
-                days_set = set(days)
-                min_day = min(days)
-                max_day = max(days)
-                all_days = set(pd.date_range(min_day, max_day).date)
-                missing = all_days - days_set
-                result.missing_batch_days = [str(d) for d in sorted(missing)[-10:]]
+        # When nb_batch_executions is available, detect days where batch didn't
+        # run even if interactive users were active — avoids silent batch failures.
+        if 'day' in df.columns and result.batch_ratio > 0.3:
+            if 'nb_batch_executions' in df.columns:
+                daily_batch = df.groupby(df['day'].dt.date)['nb_batch_executions'].sum()
+                if len(daily_batch) > 7:
+                    min_day = daily_batch.index.min()
+                    max_day = daily_batch.index.max()
+                    all_days = pd.date_range(min_day, max_day).date
+                    missing = [
+                        d for d in all_days
+                        if d not in daily_batch.index or daily_batch.get(d, 0) == 0
+                    ]
+                    result.missing_batch_days = [str(d) for d in sorted(missing)[-10:]]
+            else:
+                # Fallback: days with no executions at all
+                days = df['day'].dropna().dt.date.unique()
+                if len(days) > 7:
+                    days_set = set(days)
+                    min_day = min(days)
+                    max_day = max(days)
+                    all_days = set(pd.date_range(min_day, max_day).date)
+                    missing = all_days - days_set
+                    result.missing_batch_days = [str(d) for d in sorted(missing)[-10:]]
 
     def _calculate_scores(self, result: DataQualityResult):
-        """Calculate overall trust scores."""
+        """Calculate overall trust scores.
+
+        Fixes applied vs original:
+        - Freshness: single deduction using split stale/very_stale percentages
+          (very_stale weighted 2× stale) — avoids double-counting very_stale.
+        - Data flow: relative thresholds (% of metrics) instead of absolute counts
+          so small and large workspaces are judged on the same scale.
+        - Scenarios: underutilized penalty capped at 4 scenarios (−20 max) to
+          prevent normal simulation workspaces from always bottoming out.
+        - Batch detection: when nb_batch_executions column is available, detect
+          days where batch didn't run even if interactive users were active.
+        """
         # Data Quality Score (freshness + data flow)
         dq_score = 100.0
 
-        # Freshness deductions
+        # Freshness — single deduction, very_stale weighted 2×
         if result.total_metrics > 0:
-            stale_pct = (result.stale_metrics + result.very_stale_metrics) / result.total_metrics * 100
-            dq_score -= min(stale_pct, 30)
+            stale_only_pct = result.stale_metrics / result.total_metrics * 100
+            very_stale_pct = result.very_stale_metrics / result.total_metrics * 100
+            # Combined weighted staleness, capped at 35 points
+            freshness_deduction = min(stale_only_pct * 0.5 + very_stale_pct * 1.0, 35)
+            dq_score -= freshness_deduction
 
-        if result.very_stale_metrics > 10:
-            dq_score -= 15
+        # Data flow — relative thresholds
+        if result.total_metrics > 0:
+            zero_rows_pct = result.metrics_with_zero_rows / result.total_metrics * 100
+            if zero_rows_pct > 20:
+                dq_score -= 10
 
-        # Data flow deductions
-        if result.metrics_with_zero_rows > 50:
-            dq_score -= 10
-
-        if len(result.metrics_with_row_anomalies) > 10:
-            dq_score -= 10
+            row_anomalies_pct = len(result.metrics_with_row_anomalies) / result.total_metrics * 100
+            if row_anomalies_pct > 15:
+                dq_score -= 10
 
         result.data_quality_score = max(0, dq_score)
 
@@ -503,9 +532,10 @@ class DataQualityAnalyzer:
         elif len(result.missing_batch_days) > 0:
             pr_score -= 5
 
-        # Scenario deductions
-        if len(result.underutilized_scenarios) > 0:
-            pr_score -= 5 * len(result.underutilized_scenarios)
+        # Scenario deductions — capped at 4 scenarios (−20 max)
+        # Prevents workspaces with many simulation scenarios from always failing
+        underutilized_count = min(len(result.underutilized_scenarios), 4)
+        pr_score -= 5 * underutilized_count
 
         if result.scenario_imbalance_ratio > 10:
             pr_score -= 10

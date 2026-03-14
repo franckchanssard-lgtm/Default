@@ -76,6 +76,12 @@ class ReliabilityScore:
     trust_score: float = 0.0
     trust_level: str = "unknown"
 
+    # Combined reliability score: performance capped by trust
+    # A fast workspace with unreliable data should not score A overall
+    combined_reliability_score: float = 0.0
+    combined_grade: str = "F"
+    reliability_warnings: list = field(default_factory=list)
+
 
 class ReliabilityScorer:
     """Calculate overall reliability score from analysis results."""
@@ -226,10 +232,64 @@ class ReliabilityScorer:
         # Determine grade
         result.grade = self._calculate_grade(result.total_score)
 
+        # Calculate combined reliability score and cross-score warnings
+        result.combined_reliability_score, result.combined_grade, result.reliability_warnings = \
+            self._calculate_combined_reliability(result)
+
         # Generate recommendations
         result.recommendations = self._generate_recommendations(result)
 
         return result
+
+    def _calculate_combined_reliability(self, result: "ReliabilityScore"):
+        """Calculate combined reliability score connecting performance and trust.
+
+        A workspace can be technically fast (high Performance Score) but still
+        unreliable if data is stale, processes are broken, or batch jobs fail.
+        The combined score caps or penalizes performance when trust is low.
+
+        Formula:
+          combined = performance_score * trust_multiplier
+          trust_multiplier = 1.0 (high) | 0.85 (medium) | 0.65 (low) | 0.45 (critical)
+
+        Cross-score warnings are raised when performance and trust diverge.
+        """
+        warnings = []
+
+        # Trust multiplier based on trust level
+        trust_level = result.trust_level
+        trust_multipliers = {
+            "high": 1.0,
+            "medium": 0.85,
+            "low": 0.65,
+            "critical": 0.45,
+            "unknown": 1.0,  # No trust data available — do not penalize
+        }
+        trust_multiplier = trust_multipliers.get(trust_level, 1.0)
+
+        combined = round(result.total_score * trust_multiplier, 1)
+        combined_grade = self._calculate_grade(combined)
+
+        # Warn when scores diverge significantly
+        if result.grade in ("A", "B") and trust_level in ("low", "critical"):
+            warnings.append(
+                f"⚠️ Performance grade {result.grade} but Trust level {trust_level.upper()} — "
+                "data reliability issues reduce the effective score to {combined_grade}."
+            )
+
+        if result.grade in ("D", "F") and trust_level == "high":
+            warnings.append(
+                "ℹ️ Data is reliable (Trust HIGH) but workspace is slow — "
+                "performance optimization will have immediate user impact."
+            )
+
+        if trust_level == "critical":
+            warnings.append(
+                "🚨 Trust level CRITICAL: do not use this workspace for business decisions "
+                "until data quality and process reliability issues are resolved."
+            )
+
+        return combined, combined_grade, warnings
 
     def _calculate_grade(self, score: float) -> str:
         """Convert numeric score to letter grade."""
@@ -249,6 +309,11 @@ class ReliabilityScorer:
         """Generate actionable recommendations based on findings."""
 
         recommendations = []
+
+        # Cross-score reliability warnings go first
+        for warning in result.reliability_warnings:
+            if warning not in recommendations:
+                recommendations.append(warning)
 
         # Performance recommendations
         perf = result.performance_result

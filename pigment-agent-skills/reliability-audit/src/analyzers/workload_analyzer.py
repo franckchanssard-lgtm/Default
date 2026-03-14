@@ -173,26 +173,49 @@ class WorkloadAnalyzer:
         )
 
     def _calculate_score(self, result: WorkloadAnalysisResult) -> float:
-        """Calculate views/workload score (0-25 points)."""
+        """Calculate views/workload score (0-25 points).
+
+        Combines two signals:
+        - Views performance (60%): % of views slower than threshold
+        - Compute concentration (40%): % of total time in the heaviest app
+
+        The concentration signal was previously computed but ignored. A monolithic
+        app consuming 80%+ of all compute is a structural risk regardless of
+        whether individual views are fast today.
+        """
 
         max_score = self.config.scoring.views_weight
 
+        # --- Signal 1: slow views (60% weight) ---
         if result.total_view_executions == 0:
-            # No view data - give neutral score
-            return max_score * 0.8
-
-        # Score based on slow views percentage
-        slow_pct = result.slow_views_pct
-
-        if slow_pct <= 5:
-            score = max_score
-        elif slow_pct <= 10:
-            score = max_score * 0.85
-        elif slow_pct <= 20:
-            score = max_score * 0.7
-        elif slow_pct <= 30:
-            score = max_score * 0.5
+            # No view data — neutral, slight discount vs perfect score
+            views_score = max_score * 0.75
         else:
-            score = max_score * 0.3
+            slow_pct = result.slow_views_pct
+            if slow_pct <= 5:
+                views_score = max_score
+            elif slow_pct <= 10:
+                views_score = max_score * 0.85
+            elif slow_pct <= 20:
+                views_score = max_score * 0.7
+            elif slow_pct <= 30:
+                views_score = max_score * 0.5
+            else:
+                views_score = max_score * 0.3
+
+        # --- Signal 2: compute concentration (40% weight) ---
+        top_pct = result.top_app_pct
+        if top_pct <= 40:
+            concentration_score = max_score
+        elif top_pct <= 55:
+            concentration_score = max_score * 0.85
+        elif top_pct <= 70:
+            concentration_score = max_score * 0.7
+        elif top_pct <= 85:
+            concentration_score = max_score * 0.5
+        else:
+            concentration_score = max_score * 0.3
+
+        score = views_score * 0.6 + concentration_score * 0.4
 
         return round(score, 1)

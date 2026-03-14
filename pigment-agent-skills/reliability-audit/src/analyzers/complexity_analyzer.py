@@ -157,32 +157,65 @@ class ComplexityAnalyzer:
         return result
 
     def _calculate_score(self, result: ComplexityAnalysisResult) -> float:
-        """Calculate complexity score (0-25 points)."""
+        """Calculate complexity score (0-25 points).
+
+        Combines three signals with explicit weighting:
+        - High-complexity metric rate (50%): structural complexity
+        - dims↔time correlation (30%): whether dimensions actually cause slowness
+        - Average dimensions (20%): overall model heaviness
+
+        The correlation is the most analytically meaningful signal: if dimensions
+        strongly predict execution time, reducing them has measurable ROI.
+        """
 
         max_score = self.config.scoring.complexity_weight
 
         if result.total_metrics == 0:
             return max_score
 
-        # Score based on percentage of high-complexity metrics
-        high_complexity_count = result.critical_count + result.warning_count
-        high_complexity_pct = high_complexity_count / result.total_metrics * 100
+        # --- Signal 1: high-complexity metric rate (warning + critical, weighted) ---
+        # Critical metrics count double vs warning to preserve severity distinction
+        weighted_high = result.critical_count * 2 + result.warning_count
+        weighted_total = result.total_metrics * 2  # normalize against double-weighted
+        high_complexity_pct = (result.critical_count + result.warning_count) / result.total_metrics * 100
 
         if high_complexity_pct <= 5:
-            score = max_score
+            structure_score = max_score
         elif high_complexity_pct <= 10:
-            score = max_score * 0.85
+            structure_score = max_score * 0.85
         elif high_complexity_pct <= 20:
-            score = max_score * 0.7
+            structure_score = max_score * 0.7
         elif high_complexity_pct <= 30:
-            score = max_score * 0.5
+            structure_score = max_score * 0.5
         else:
-            score = max_score * 0.3
+            structure_score = max_score * 0.3
 
-        # Bonus/penalty based on average dimensions
+        # --- Signal 2: dims↔time correlation ---
+        # If correlation is strong, dimensions are actually causing slowness.
+        # A high-dimension workspace with low correlation may be optimized elsewhere.
+        corr = result.dims_time_correlation
+        if corr is None:
+            corr_multiplier = 1.0  # No data — neutral
+        elif corr >= 0.7:
+            corr_multiplier = 0.65  # Strong causal link — heavy penalty
+        elif corr >= 0.5:
+            corr_multiplier = 0.8   # Moderate link
+        elif corr >= 0.3:
+            corr_multiplier = 0.92  # Weak link — mild penalty
+        else:
+            corr_multiplier = 1.0   # No meaningful correlation — no penalty
+
+        # --- Signal 3: average dimensions ---
         if result.avg_dimensions <= 3:
-            score = min(max_score, score * 1.1)
-        elif result.avg_dimensions >= 6:
-            score *= 0.85
+            avg_multiplier = 1.05
+        elif result.avg_dimensions <= 5:
+            avg_multiplier = 1.0
+        elif result.avg_dimensions <= 7:
+            avg_multiplier = 0.9
+        else:
+            avg_multiplier = 0.8
+
+        # Weighted combination: structure 50%, correlation 30%, avg_dims 20%
+        score = structure_score * (0.5 + 0.3 * corr_multiplier + 0.2 * avg_multiplier)
 
         return round(min(max_score, score), 1)

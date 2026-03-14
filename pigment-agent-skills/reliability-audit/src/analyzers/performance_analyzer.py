@@ -36,6 +36,7 @@ class PerformanceAnalysisResult:
     total_execution_time_ms: float = 0
     avg_execution_time_ms: float = 0
     p50_execution_time_ms: float = 0
+    p75_execution_time_ms: float = 0
     p95_execution_time_ms: float = 0
     p99_execution_time_ms: float = 0
 
@@ -96,6 +97,7 @@ class PerformanceAnalyzer:
         if len(exec_times) > 0:
             result.avg_execution_time_ms = exec_times.mean()
             result.p50_execution_time_ms = exec_times.quantile(0.5)
+            result.p75_execution_time_ms = exec_times.quantile(0.75)
             result.p95_execution_time_ms = exec_times.quantile(0.95)
             result.p99_execution_time_ms = exec_times.quantile(0.99)
 
@@ -197,27 +199,32 @@ class PerformanceAnalyzer:
                 ))
 
     def _calculate_score(self, result: PerformanceAnalysisResult) -> float:
-        """Calculate performance score (0-25 points)."""
+        """Calculate performance score (0-25 points).
+
+        Uses P75 instead of mean to avoid masking outliers: a workspace with
+        999 fast metrics + 1 timeout would score full marks on the mean, but
+        P75 surfaces that 25% of executions are slow.
+        """
 
         max_score = self.config.scoring.performance_weight
 
-        # Base score on average execution time
-        avg_time = result.avg_execution_time_ms
+        # Base score on P75 execution time (more representative than mean)
+        p75_time = result.p75_execution_time_ms
 
-        if avg_time < 1000:
+        if p75_time < 1000:
             base_score = max_score
-        elif avg_time < 2000:
+        elif p75_time < 2000:
             base_score = max_score * 0.9
-        elif avg_time < 3000:
+        elif p75_time < 3000:
             base_score = max_score * 0.8
-        elif avg_time < 5000:
+        elif p75_time < 5000:
             base_score = max_score * 0.6
-        elif avg_time < 10000:
+        elif p75_time < 10000:
             base_score = max_score * 0.4
         else:
             base_score = max_score * 0.2
 
-        # Penalty for critical issues
-        critical_penalty = min(result.critical_count * 2, max_score * 0.3)
+        # Penalty for critical issues — uncapped to reflect true severity
+        critical_penalty = min(result.critical_count * 2, max_score * 0.6)
 
         return max(0, round(base_score - critical_penalty, 1))
