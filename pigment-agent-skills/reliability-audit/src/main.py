@@ -18,6 +18,7 @@ Options:
     --web               Start web interface for CSV upload
     --metadata-key KEY  Pigment Metadata API key for name enrichment
     --audit-key KEY     Pigment Audit Logs API key
+    --audit-log-file PATH  Path to a local Audit Logs JSON file (demo/offline)
 """
 
 import argparse
@@ -174,6 +175,12 @@ Examples:
         help="Pigment Audit Logs API key"
     )
     parser.add_argument(
+        "--audit-log-file",
+        type=str,
+        default=None,
+        help="Path to local Audit Logs JSON file (demo/offline)"
+    )
+    parser.add_argument(
         "--port",
         type=int,
         default=8080,
@@ -251,7 +258,8 @@ Examples:
     scorer = ReliabilityScorer(
         config,
         metadata_api_key=args.metadata_key,
-        audit_api_key=args.audit_key
+        audit_api_key=args.audit_key,
+        audit_logs_path=args.audit_log_file
     )
     score = scorer.score(data)
 

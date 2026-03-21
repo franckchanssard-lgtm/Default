@@ -10,6 +10,7 @@ import shutil
 import tempfile
 from pathlib import Path
 from datetime import datetime
+from typing import Optional
 
 from flask import Flask, render_template_string, request, jsonify, send_file
 
@@ -19,7 +20,7 @@ from .scoring import ReliabilityScorer
 from .report_generator import ReportGenerator
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max
+app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024 * 1024  # 1GB max
 
 # Store report data temporarily (capped at 20 entries to avoid unbounded growth)
 _MAX_STORED_REPORTS = 20
@@ -270,6 +271,19 @@ HTML_TEMPLATE = """
             background: #fee2e2; color: #dc2626;
             padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem;
         }
+        .csv-req {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            padding: 0.9rem 1.1rem;
+            margin-bottom: 1.25rem;
+            font-size: 0.85rem;
+            color: #374151;
+        }
+        .csv-req h3 { font-size: 0.9rem; margin-bottom: 0.5rem; color: #111827; }
+        .csv-req code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.82rem; }
+        .csv-req ul { margin-left: 1.1rem; }
+        .csv-req li { margin: 0.2rem 0; }
     </style>
 </head>
 <body>
@@ -325,6 +339,30 @@ HTML_TEMPLATE = """
                     <div class="upload-filename" id="armset-filename"></div>
                     <div class="file-info" id="armset-info"></div>
                 </div>
+
+                <div class="upload-zone" id="auditlogs-zone"
+                     onclick="document.getElementById('auditlogs-input').click()">
+                    <input type="file" id="auditlogs-input" accept=".csv"
+                           onchange="handleUpload(this, 'auditlogs')">
+                    <div class="upload-icon">🧾</div>
+                    <div class="upload-text">
+                        <strong>Audit Logs CSV</strong><br>
+                        <small>User activity and permissions</small>
+                    </div>
+                    <div class="upload-filename" id="auditlogs-filename"></div>
+                    <div class="file-info" id="auditlogs-info"></div>
+                </div>
+            </div>
+
+            <div class="csv-req">
+                <h3>CSV requirements (minimum columns)</h3>
+                <ul>
+                    <li><b>Executions CSV</b>: <code>application, metric_id, metric_name, execution_time</code></li>
+                    <li><b>Views CSV</b>: <code>app_id, blockId, blockName, execution_time</code></li>
+                    <li><b>Armset CSV</b>: <code>app_id, app_name, blockId, blockName, execution_time, computed_rows</code></li>
+                    <li><b>Audit Logs CSV (optional)</b>: <code>event_id, event_timestamp, event_type, user_email, user_name, entity_id, entity_name, entity_application_id, entity_application_name</code></li>
+                </ul>
+                <div class="file-info">If a required column is missing, the audit will return a CSV format error.</div>
             </div>
 
             <div class="api-section">
@@ -428,7 +466,7 @@ HTML_TEMPLATE = """
         function clearDemoMode() {
             if (!uploadedFiles['__demo__']) return;
             delete uploadedFiles['__demo__'];
-            ['executions', 'views', 'armset'].forEach(t => {
+            ['executions', 'views', 'armset', 'auditlogs'].forEach(t => {
                 if (!uploadedFiles[t]) {
                     document.getElementById(t + '-zone').classList.remove('uploaded');
                     document.getElementById(t + '-filename').textContent = '';
@@ -480,6 +518,7 @@ HTML_TEMPLATE = """
                 delete uploadedFiles.executions;
                 delete uploadedFiles.views;
                 delete uploadedFiles.armset;
+                delete uploadedFiles.auditlogs;
 
                 // Mark all three zones as loaded (server reads the files directly)
                 markZoneLoaded('executions', info.executions_name, info.executions_size);
@@ -529,6 +568,7 @@ HTML_TEMPLATE = """
                 formData.append('executions', uploadedFiles.executions);
                 if (uploadedFiles.views)  formData.append('views',  uploadedFiles.views);
                 if (uploadedFiles.armset) formData.append('armset', uploadedFiles.armset);
+                if (uploadedFiles.auditlogs) formData.append('audit_logs', uploadedFiles.auditlogs);
                 const useApi = document.getElementById('use-api').checked;
                 if (useApi) {
                     formData.append('metadata_key', document.getElementById('metadata-key').value);
@@ -660,10 +700,45 @@ HTML_TEMPLATE = """
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 _DEMO_DIR = Path(__file__).parent.parent / "demo-data"
+_REQUIRED_COLUMNS = {
+    "executions": ["application", "metric_id", "metric_name", "execution_time"],
+    "views": ["app_id", "blockId", "blockName", "execution_time"],
+    "armset": ["app_id", "app_name", "blockId", "blockName", "execution_time", "computed_rows"],
+}
+
+
+def _validate_required_columns(data: PerformanceData) -> Optional[str]:
+    missing = []
+
+    if data.has_executions:
+        req = _REQUIRED_COLUMNS["executions"]
+        cols = set(data.executions.columns)
+        miss = [c for c in req if c not in cols]
+        if miss:
+            missing.append(f"Executions CSV is missing required columns: {', '.join(miss)}")
+
+    if data.has_views:
+        req = _REQUIRED_COLUMNS["views"]
+        cols = set(data.views.columns)
+        miss = [c for c in req if c not in cols]
+        if miss:
+            missing.append(f"Views CSV is missing required columns: {', '.join(miss)}")
+
+    if data.has_armset:
+        req = _REQUIRED_COLUMNS["armset"]
+        cols = set(data.armset.columns)
+        miss = [c for c in req if c not in cols]
+        if miss:
+            missing.append(f"Armset CSV is missing required columns: {', '.join(miss)}")
+
+    if missing:
+        return "CSV format error. " + " | ".join(missing)
+
+    return None
 
 
 def _run_audit_from_paths(executions_path, views_path=None, armset_path=None,
-                           metadata_key=None, audit_key=None):
+                           metadata_key=None, audit_key=None, audit_logs_path=None):
     """Shared audit logic. Returns (result_dict, error_str)."""
     config = load_config()
     loader = DataLoader(config)
@@ -676,7 +751,16 @@ def _run_audit_from_paths(executions_path, views_path=None, armset_path=None,
     if not data.has_executions:
         return None, "Could not load executions data"
 
-    scorer = ReliabilityScorer(config, metadata_api_key=metadata_key, audit_api_key=audit_key)
+    missing = _validate_required_columns(data)
+    if missing:
+        return None, missing
+
+    scorer = ReliabilityScorer(
+        config,
+        metadata_api_key=metadata_key,
+        audit_api_key=audit_key,
+        audit_logs_path=str(audit_logs_path) if audit_logs_path else None
+    )
     score = scorer.score(data)
 
     generator = ReportGenerator(config)
@@ -727,25 +811,34 @@ def run_audit():
     executions_file = request.files['executions']
     views_file  = request.files.get('views')
     armset_file = request.files.get('armset')
+    audit_logs_file = request.files.get('audit_logs')
 
     temp_dir = tempfile.mkdtemp()
     try:
         executions_path = os.path.join(temp_dir, 'executions.csv')
         executions_file.save(executions_path)
 
-        views_path = armset_path = None
+        views_path = armset_path = audit_logs_path = None
         if views_file:
             views_path = os.path.join(temp_dir, 'views.csv')
             views_file.save(views_path)
         if armset_file:
             armset_path = os.path.join(temp_dir, 'armset.csv')
             armset_file.save(armset_path)
+        if audit_logs_file:
+            audit_logs_path = os.path.join(temp_dir, 'audit_logs.csv')
+            audit_logs_file.save(audit_logs_path)
 
         metadata_key = request.form.get('metadata_key', '').strip() or None
         audit_key    = request.form.get('audit_key', '').strip() or None
 
         result, err = _run_audit_from_paths(
-            executions_path, views_path, armset_path, metadata_key, audit_key
+            executions_path,
+            views_path,
+            armset_path,
+            metadata_key,
+            audit_key,
+            audit_logs_path
         )
         if err:
             return jsonify({'error': err}), 400
@@ -792,6 +885,7 @@ def run_demo_audit():
         exec_path   = _DEMO_DIR / "Executions_demo.csv"
         views_path  = _DEMO_DIR / "Views_Executions_demo.csv"
         armset_path = _DEMO_DIR / "Armset_Upmset_Executions_demo.csv"
+        audit_logs_path = _DEMO_DIR / "Audit_Logs_demo.json"
 
         if not exec_path.exists():
             return jsonify({'error': 'Demo data not found. Run: python demo-data/generate_demo.py'}), 404
@@ -800,6 +894,9 @@ def run_demo_audit():
             exec_path,
             views_path  if views_path.exists()  else None,
             armset_path if armset_path.exists() else None,
+            None,
+            None,
+            audit_logs_path if audit_logs_path.exists() else None
         )
         if err:
             return jsonify({'error': err}), 400

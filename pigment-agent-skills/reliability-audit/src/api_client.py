@@ -4,7 +4,10 @@ Pigment API Client for Metadata and Audit Logs APIs.
 Provides enrichment capabilities for reliability audits.
 """
 
+import csv
+import json
 import time
+from pathlib import Path
 from typing import Optional, Dict, List, Any
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -389,6 +392,167 @@ class AuditLogsAPIClient:
         ]
         since = datetime.now() - timedelta(days=days)
         return self.get_events(since=since, event_types=change_types)
+
+
+class AuditLogsFileClient(AuditLogsAPIClient):
+    """Client for Audit Logs stored in a local JSON file (demo/offline)."""
+
+    def __init__(self, path: str):
+        self.path = str(path)
+        self._events_cache: Optional[List[AuditEvent]] = None
+
+    def _load_events(self) -> List[AuditEvent]:
+        if self._events_cache is not None:
+            return self._events_cache
+
+        path = Path(self.path)
+        if not path.exists():
+            raise FileNotFoundError(f"Audit logs file not found: {self.path}")
+
+        if path.suffix.lower() == ".csv":
+            events = self._load_csv_events(path)
+        else:
+            with path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            if isinstance(data, dict):
+                data = data.get("events", [])
+
+            if not isinstance(data, list):
+                raise ValueError("Audit logs JSON must be a list or {\"events\": [...]} object")
+
+            events = []
+            for idx, raw in enumerate(data):
+                if not isinstance(raw, dict):
+                    continue
+                events.append(self._parse_event(raw, idx))
+
+        self._events_cache = events
+        return events
+
+    def _load_csv_events(self, path: Path) -> List[AuditEvent]:
+        events: List[AuditEvent] = []
+        with path.open("r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for idx, row in enumerate(reader):
+                events.append(self._parse_csv_event(row, idx))
+        return events
+
+    def _parse_event(self, raw: Dict[str, Any], idx: int) -> AuditEvent:
+        def pick(*keys, default=None):
+            for key in keys:
+                if key in raw and raw[key] is not None:
+                    return raw[key]
+            return default
+
+        actor = raw.get("actor") or {}
+        target = raw.get("target") or {}
+
+        return AuditEvent(
+            event_id=pick("event_id", "eventId", default=f"demo-{idx}"),
+            event_type=pick("event_type", "eventType", default=""),
+            event_timestamp=pick("event_timestamp", "eventTimestamp", default=""),
+            actor_email=pick("actor_email", "actorEmail", default=actor.get("email")),
+            actor_name=pick("actor_name", "actorName", default=actor.get("name")),
+            target_application_id=pick(
+                "target_application_id",
+                "targetApplicationId",
+                default=target.get("applicationId")
+            ),
+            target_application_name=pick(
+                "target_application_name",
+                "targetApplicationName",
+                default=target.get("applicationName")
+            ),
+            target_block_id=pick("target_block_id", "targetBlockId", default=target.get("blockId")),
+            metadata=raw.get("metadata") or {},
+        )
+
+    def _parse_csv_event(self, raw: Dict[str, Any], idx: int) -> AuditEvent:
+        def clean(value: Optional[str]) -> Optional[str]:
+            if value is None:
+                return None
+            v = str(value).strip()
+            if not v or v.lower() == "nan":
+                return None
+            return v
+
+        def pick(*keys, default=None):
+            for key in keys:
+                v = clean(raw.get(key))
+                if v is not None:
+                    return v
+            return default
+
+        payload_raw = clean(raw.get("payload_json"))
+        payload = None
+        if payload_raw:
+            try:
+                payload = json.loads(payload_raw)
+            except json.JSONDecodeError:
+                payload = None
+
+        metadata = {
+            "entityType": pick("entity_type"),
+            "entityId": pick("entity_id"),
+            "entityName": pick("entity_name"),
+        }
+        if payload is not None:
+            metadata["payload"] = payload
+
+        return AuditEvent(
+            event_id=pick("event_id", "eventId", default=f"csv-{idx}"),
+            event_type=pick("event_type", "eventType", default=""),
+            event_timestamp=pick("event_timestamp", "eventTimestamp", "published_at", default=""),
+            actor_email=pick("user_email", "actor_email", "actorEmail"),
+            actor_name=pick("user_name", "actor_name", "actorName"),
+            target_application_id=pick("entity_application_id", "application_id", "target_application_id"),
+            target_application_name=pick("entity_application_name", "application_name", "target_application_name"),
+            target_block_id=pick("entity_id", "target_block_id"),
+            metadata=metadata,
+        )
+
+    @staticmethod
+    def _parse_ts(value: str) -> Optional[datetime]:
+        if not value:
+            return None
+        ts = value.strip()
+        if ts.endswith(" UTC"):
+            ts = ts[:-4] + "Z"
+        if "T" not in ts and " " in ts:
+            parts = ts.split(" ", 1)
+            ts = parts[0] + "T" + parts[1]
+        ts = ts.replace("Z", "+00:00")
+        try:
+            return datetime.fromisoformat(ts)
+        except ValueError:
+            return None
+
+    def get_events(
+        self,
+        since: Optional[datetime] = None,
+        event_types: Optional[List[str]] = None,
+        max_events: int = 1000
+    ) -> List[AuditEvent]:
+        events = list(self._load_events())
+
+        if event_types:
+            events = [e for e in events if e.event_type in event_types]
+
+        if since:
+            since_dt = since.replace(tzinfo=None)
+            filtered = []
+            for e in events:
+                event_dt = self._parse_ts(e.event_timestamp)
+                if event_dt is None:
+                    filtered.append(e)
+                    continue
+                if event_dt.replace(tzinfo=None) >= since_dt:
+                    filtered.append(e)
+            events = filtered
+
+        events.sort(key=lambda e: e.event_timestamp or "", reverse=False)
+        return events[:max_events]
 
 
 class APIEnricher:

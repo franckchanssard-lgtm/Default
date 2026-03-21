@@ -1,0 +1,555 @@
+[
+  {
+    "event_id": "evt_0001",
+    "event_type": "BoardViewed",
+    "event_timestamp": "2026-03-04T08:15:10Z",
+    "actor_email": "alice@acme.com",
+    "actor_name": "Alice Martin",
+    "target_application_id": "APP_FINANCE",
+    "target_application_name": "Finance Planning",
+    "target_block_id": "BOARD_EXEC",
+    "metadata": {
+      "boardId": "BOARD_EXEC",
+      "boardName": "Executive Summary"
+    }
+  },
+  {
+    "event_id": "evt_0002",
+    "event_type": "BoardViewed",
+    "event_timestamp": "2026-03-04T08:17:55Z",
+    "actor_email": "alice@acme.com",
+    "actor_name": "Alice Martin",
+    "target_application_id": "APP_FINANCE",
+    "target_application_name": "Finance Planning",
+    "target_block_id": "BOARD_PNL",
+    "metadata": {
+      "boardId": "BOARD_PNL",
+      "boardName": "P&L Analysis"
+    }
+  },
+  {
+    "event_id": "evt_0003",
+    "event_type": "ImportExecuted",
+    "event_timestamp": "2026-03-04T08:45:12Z",
+    "actor_email": "alice@acme.com",
+    "actor_name": "Alice Martin",
+    "target_application_id": "APP_FINANCE",
+    "target_application_name": "Finance Planning",
+    "target_block_id": "METRIC_CONSOL",
+    "metadata": {
+      "importType": "CSV",
+      "rows": 5200
+    }
+  },
+  {
+    "event_id": "evt_0004",
+    "event_type": "FormulaUpdated",
+    "event_timestamp": "2026-03-04T09:05:00Z",
+    "actor_email": "alice@acme.com",
+    "actor_name": "Alice Martin",
+    "target_application_id": "APP_FINANCE",
+    "target_application_name": "Finance Planning",
+    "target_block_id": "METRIC_MARGIN",
+    "metadata": {
+      "metricId": "METRIC_MARGIN",
+      "change": "scoping"
+    }
+  },
+  {
+    "event_id": "evt_0005",
+    "event_type": "BoardViewed",
+    "event_timestamp": "2026-03-04T09:15:00Z",
+    "actor_email": "bob@acme.com",
+    "actor_name": "Bob Durand",
+    "target_application_id": "APP_HR",
+    "target_application_name": "HR Analytics",
+    "target_block_id": "BOARD_HC",
+    "metadata": {
+      "boardId": "BOARD_HC",
+      "boardName": "Headcount Dashboard"
+    }
+  },
+  {
+    "event_id": "evt_0006",
+    "event_type": "BoardViewed",
+    "event_timestamp": "2026-03-04T09:17:00Z",
+    "actor_email": "bob@acme.com",
+    "actor_name": "Bob Durand",
+    "target_application_id": "APP_HR",
+    "target_application_name": "HR Analytics",
+    "target_block_id": "BOARD_ATTR",
+    "metadata": {
+      "boardId": "BOARD_ATTR",
+      "boardName": "Attrition Tracker"
+    }
+  },
+  {
+    "event_id": "evt_0007",
+    "event_type": "ImportExecuted",
+    "event_timestamp": "2026-03-04T09:30:00Z",
+    "actor_email": "bob@acme.com",
+    "actor_name": "Bob Durand",
+    "target_application_id": "APP_HR",
+    "target_application_name": "HR Analytics",
+    "target_block_id": "METRIC_HC",
+    "metadata": {
+      "importType": "CSV",
+      "rows": 1200
+    }
+  },
+  {
+    "event_id": "evt_0008",
+    "event_type": "BoardViewed",
+    "event_timestamp": "2026-03-04T10:00:00Z",
+    "actor_email": "carol@acme.com",
+    "actor_name": "Carol Nguyen",
+    "target_application_id": "APP_SUPPLY",
+    "target_application_name": "Supply Chain",
+    "target_block_id": "BOARD_INV",
+    "metadata": {
+      "boardId": "BOARD_INV",
+      "boardName": "Inventory Status"
+    }
+  },
+  {
+    "event_id": "evt_0009",
+    "event_type": "BoardViewed",
+    "event_timestamp": "2026-03-04T10:05:00Z",
+    "actor_email": "carol@acme.com",
+    "actor_name": "Carol Nguyen",
+    "target_application_id": "APP_SUPPLY",
+    "target_application_name": "Supply Chain",
+    "target_block_id": "BOARD_SHIP",
+    "metadata": {
+      "boardId": "BOARD_SHIP",
+      "boardName": "Shipping Tracker"
+    }
+  },
+  {
+    "event_id": "evt_0010",
+    "event_type": "BulkInput",
+    "event_timestamp": "2026-03-04T10:20:00Z",
+    "actor_email": "carol@acme.com",
+    "actor_name": "Carol Nguyen",
+    "target_application_id": "APP_SUPPLY",
+    "target_application_name": "Supply Chain",
+    "target_block_id": "METRIC_SHIP",
+    "metadata": {
+      "rows": 320,
+      "source": "manual"
+    }
+  },
+  {
+    "event_id": "evt_0011",
+    "event_type": "BoardViewed",
+    "event_timestamp": "2026-03-04T10:30:00Z",
+    "actor_email": "dan@acme.com",
+    "actor_name": "Dan Lefevre",
+    "target_application_id": "APP_SALES",
+    "target_application_name": "Sales Dashboard",
+    "target_block_id": "BOARD_PIPE",
+    "metadata": {
+      "boardId": "BOARD_PIPE",
+      "boardName": "Pipeline View"
+    }
+  },
+  {
+    "event_id": "evt_0012",
+    "event_type": "BoardViewed",
+    "event_timestamp": "2026-03-04T10:35:00Z",
+    "actor_email": "dan@acme.com",
+    "actor_name": "Dan Lefevre",
+    "target_application_id": "APP_SALES",
+    "target_application_name": "Sales Dashboard",
+    "target_block_id": "BOARD_QUOTA",
+    "metadata": {
+      "boardId": "BOARD_QUOTA",
+      "boardName": "Quota Tracker"
+    }
+  },
+  {
+    "event_id": "evt_0013",
+    "event_type": "ExportExecuted",
+    "event_timestamp": "2026-03-04T10:40:00Z",
+    "actor_email": "dan@acme.com",
+    "actor_name": "Dan Lefevre",
+    "target_application_id": "APP_SALES",
+    "target_application_name": "Sales Dashboard",
+    "target_block_id": "BOARD_QUOTA",
+    "metadata": {
+      "exportType": "CSV"
+    }
+  },
+  {
+    "event_id": "evt_0014",
+    "event_type": "ApplicationOpened",
+    "event_timestamp": "2026-03-05T08:05:00Z",
+    "actor_email": "alice@acme.com",
+    "actor_name": "Alice Martin",
+    "target_application_id": "APP_FINANCE",
+    "target_application_name": "Finance Planning",
+    "target_block_id": null,
+    "metadata": {}
+  },
+  {
+    "event_id": "evt_0015",
+    "event_type": "BoardViewed",
+    "event_timestamp": "2026-03-05T08:15:00Z",
+    "actor_email": "alice@acme.com",
+    "actor_name": "Alice Martin",
+    "target_application_id": "APP_FINANCE",
+    "target_application_name": "Finance Planning",
+    "target_block_id": "BOARD_EXEC",
+    "metadata": {
+      "boardId": "BOARD_EXEC",
+      "boardName": "Executive Summary"
+    }
+  },
+  {
+    "event_id": "evt_0016",
+    "event_type": "BoardViewed",
+    "event_timestamp": "2026-03-05T08:20:00Z",
+    "actor_email": "alice@acme.com",
+    "actor_name": "Alice Martin",
+    "target_application_id": "APP_FINANCE",
+    "target_application_name": "Finance Planning",
+    "target_block_id": "BOARD_CONSOL",
+    "metadata": {
+      "boardId": "BOARD_CONSOL",
+      "boardName": "Consolidation View"
+    }
+  },
+  {
+    "event_id": "evt_0017",
+    "event_type": "ImportExecuted",
+    "event_timestamp": "2026-03-05T08:25:00Z",
+    "actor_email": "alice@acme.com",
+    "actor_name": "Alice Martin",
+    "target_application_id": "APP_FINANCE",
+    "target_application_name": "Finance Planning",
+    "target_block_id": "METRIC_COST",
+    "metadata": {
+      "importType": "CSV",
+      "rows": 2300
+    }
+  },
+  {
+    "event_id": "evt_0018",
+    "event_type": "UserInvited",
+    "event_timestamp": "2026-03-05T09:00:00Z",
+    "actor_email": "admin@acme.com",
+    "actor_name": "Admin User",
+    "target_application_id": null,
+    "target_application_name": null,
+    "target_block_id": null,
+    "metadata": {
+      "targetUser": "eve@acme.com",
+      "roleName": "Analyst"
+    }
+  },
+  {
+    "event_id": "evt_0019",
+    "event_type": "RoleAssigned",
+    "event_timestamp": "2026-03-05T09:05:00Z",
+    "actor_email": "admin@acme.com",
+    "actor_name": "Admin User",
+    "target_application_id": "APP_FINANCE",
+    "target_application_name": "Finance Planning",
+    "target_block_id": null,
+    "metadata": {
+      "targetUser": "eve@acme.com",
+      "roleName": "Analyst"
+    }
+  },
+  {
+    "event_id": "evt_0020",
+    "event_type": "PermissionGranted",
+    "event_timestamp": "2026-03-05T09:10:00Z",
+    "actor_email": "admin@acme.com",
+    "actor_name": "Admin User",
+    "target_application_id": "APP_FINANCE",
+    "target_application_name": "Finance Planning",
+    "target_block_id": null,
+    "metadata": {
+      "targetUser": "eve@acme.com",
+      "roleName": "Finance Viewer"
+    }
+  },
+  {
+    "event_id": "evt_0021",
+    "event_type": "PermissionRevoked",
+    "event_timestamp": "2026-03-05T09:20:00Z",
+    "actor_email": "admin@acme.com",
+    "actor_name": "Admin User",
+    "target_application_id": "APP_SALES",
+    "target_application_name": "Sales Dashboard",
+    "target_block_id": null,
+    "metadata": {
+      "targetUser": "temp@acme.com",
+      "roleName": "Sales Viewer"
+    }
+  },
+  {
+    "event_id": "evt_0022",
+    "event_type": "BoardViewed",
+    "event_timestamp": "2026-03-06T08:10:00Z",
+    "actor_email": "alice@acme.com",
+    "actor_name": "Alice Martin",
+    "target_application_id": "APP_FINANCE",
+    "target_application_name": "Finance Planning",
+    "target_block_id": "BOARD_EXEC",
+    "metadata": {
+      "boardId": "BOARD_EXEC",
+      "boardName": "Executive Summary"
+    }
+  },
+  {
+    "event_id": "evt_0023",
+    "event_type": "PageViewed",
+    "event_timestamp": "2026-03-06T08:40:00Z",
+    "actor_email": "bob@acme.com",
+    "actor_name": "Bob Durand",
+    "target_application_id": "APP_HR",
+    "target_application_name": "HR Analytics",
+    "target_block_id": "BOARD_HC",
+    "metadata": {
+      "boardId": "BOARD_HC",
+      "boardName": "Headcount Dashboard"
+    }
+  },
+  {
+    "event_id": "evt_0024",
+    "event_type": "ImportCompleted",
+    "event_timestamp": "2026-03-06T09:00:00Z",
+    "actor_email": "bob@acme.com",
+    "actor_name": "Bob Durand",
+    "target_application_id": "APP_HR",
+    "target_application_name": "HR Analytics",
+    "target_block_id": "METRIC_ATTR",
+    "metadata": {
+      "importType": "CSV",
+      "rows": 900
+    }
+  },
+  {
+    "event_id": "evt_0025",
+    "event_type": "BlockModified",
+    "event_timestamp": "2026-03-06T09:15:00Z",
+    "actor_email": "carol@acme.com",
+    "actor_name": "Carol Nguyen",
+    "target_application_id": "APP_SUPPLY",
+    "target_application_name": "Supply Chain",
+    "target_block_id": "METRIC_SHIP",
+    "metadata": {
+      "change": "formula"
+    }
+  },
+  {
+    "event_id": "evt_0026",
+    "event_type": "BoardViewed",
+    "event_timestamp": "2026-03-06T09:20:00Z",
+    "actor_email": "carol@acme.com",
+    "actor_name": "Carol Nguyen",
+    "target_application_id": "APP_SUPPLY",
+    "target_application_name": "Supply Chain",
+    "target_block_id": "BOARD_SHIP",
+    "metadata": {
+      "boardId": "BOARD_SHIP",
+      "boardName": "Shipping Tracker"
+    }
+  },
+  {
+    "event_id": "evt_0027",
+    "event_type": "BoardViewed",
+    "event_timestamp": "2026-03-06T10:00:00Z",
+    "actor_email": "dan@acme.com",
+    "actor_name": "Dan Lefevre",
+    "target_application_id": "APP_SALES",
+    "target_application_name": "Sales Dashboard",
+    "target_block_id": "BOARD_PIPE",
+    "metadata": {
+      "boardId": "BOARD_PIPE",
+      "boardName": "Pipeline View"
+    }
+  },
+  {
+    "event_id": "evt_0028",
+    "event_type": "DashboardViewed",
+    "event_timestamp": "2026-03-07T11:00:00Z",
+    "actor_email": "alice@acme.com",
+    "actor_name": "Alice Martin",
+    "target_application_id": "APP_FINANCE",
+    "target_application_name": "Finance Planning",
+    "target_block_id": "BOARD_EXEC",
+    "metadata": {
+      "boardId": "BOARD_EXEC",
+      "boardName": "Executive Summary"
+    }
+  },
+  {
+    "event_id": "evt_0029",
+    "event_type": "BoardViewed",
+    "event_timestamp": "2026-03-08T09:10:00Z",
+    "actor_email": "alice@acme.com",
+    "actor_name": "Alice Martin",
+    "target_application_id": "APP_FINANCE",
+    "target_application_name": "Finance Planning",
+    "target_block_id": "BOARD_EXEC",
+    "metadata": {
+      "boardId": "BOARD_EXEC",
+      "boardName": "Executive Summary"
+    }
+  },
+  {
+    "event_id": "evt_0030",
+    "event_type": "BoardViewed",
+    "event_timestamp": "2026-03-08T09:11:00Z",
+    "actor_email": "alice@acme.com",
+    "actor_name": "Alice Martin",
+    "target_application_id": "APP_FINANCE",
+    "target_application_name": "Finance Planning",
+    "target_block_id": "BOARD_EXEC",
+    "metadata": {
+      "boardId": "BOARD_EXEC",
+      "boardName": "Executive Summary"
+    }
+  },
+  {
+    "event_id": "evt_0031",
+    "event_type": "BoardViewed",
+    "event_timestamp": "2026-03-09T08:00:00Z",
+    "actor_email": "alice@acme.com",
+    "actor_name": "Alice Martin",
+    "target_application_id": "APP_FINANCE",
+    "target_application_name": "Finance Planning",
+    "target_block_id": "BOARD_PNL",
+    "metadata": {
+      "boardId": "BOARD_PNL",
+      "boardName": "P&L Analysis"
+    }
+  },
+  {
+    "event_id": "evt_0032",
+    "event_type": "BoardViewed",
+    "event_timestamp": "2026-03-10T08:00:00Z",
+    "actor_email": "carol@acme.com",
+    "actor_name": "Carol Nguyen",
+    "target_application_id": "APP_SUPPLY",
+    "target_application_name": "Supply Chain",
+    "target_block_id": "BOARD_INV",
+    "metadata": {
+      "boardId": "BOARD_INV",
+      "boardName": "Inventory Status"
+    }
+  },
+  {
+    "event_id": "evt_0033",
+    "event_type": "ImportStarted",
+    "event_timestamp": "2026-03-10T08:05:00Z",
+    "actor_email": "carol@acme.com",
+    "actor_name": "Carol Nguyen",
+    "target_application_id": "APP_SUPPLY",
+    "target_application_name": "Supply Chain",
+    "target_block_id": "METRIC_INV",
+    "metadata": {
+      "importType": "CSV"
+    }
+  },
+  {
+    "event_id": "evt_0034",
+    "event_type": "RoleAssigned",
+    "event_timestamp": "2026-03-11T10:00:00Z",
+    "actor_email": "admin@acme.com",
+    "actor_name": "Admin User",
+    "target_application_id": "APP_HR",
+    "target_application_name": "HR Analytics",
+    "target_block_id": null,
+    "metadata": {
+      "targetUser": "bob@acme.com",
+      "roleName": "HR Admin"
+    }
+  },
+  {
+    "event_id": "evt_0035",
+    "event_type": "PermissionGranted",
+    "event_timestamp": "2026-03-11T10:05:00Z",
+    "actor_email": "admin@acme.com",
+    "actor_name": "Admin User",
+    "target_application_id": "APP_HR",
+    "target_application_name": "HR Analytics",
+    "target_block_id": null,
+    "metadata": {
+      "targetUser": "bob@acme.com",
+      "roleName": "HR Admin"
+    }
+  },
+  {
+    "event_id": "evt_0036",
+    "event_type": "PermissionModified",
+    "event_timestamp": "2026-03-13T10:10:00Z",
+    "actor_email": "admin@acme.com",
+    "actor_name": "Admin User",
+    "target_application_id": "APP_FINANCE",
+    "target_application_name": "Finance Planning",
+    "target_block_id": null,
+    "metadata": {
+      "targetUser": "alice@acme.com",
+      "roleName": "Finance Editor"
+    }
+  },
+  {
+    "event_id": "evt_0037",
+    "event_type": "BoardViewed",
+    "event_timestamp": "2026-03-14T12:00:00Z",
+    "actor_email": "dan@acme.com",
+    "actor_name": "Dan Lefevre",
+    "target_application_id": "APP_SALES",
+    "target_application_name": "Sales Dashboard",
+    "target_block_id": "BOARD_QUOTA",
+    "metadata": {
+      "boardId": "BOARD_QUOTA",
+      "boardName": "Quota Tracker"
+    }
+  },
+  {
+    "event_id": "evt_0038",
+    "event_type": "ExportExecuted",
+    "event_timestamp": "2026-03-14T12:05:00Z",
+    "actor_email": "dan@acme.com",
+    "actor_name": "Dan Lefevre",
+    "target_application_id": "APP_SALES",
+    "target_application_name": "Sales Dashboard",
+    "target_block_id": "BOARD_QUOTA",
+    "metadata": {
+      "exportType": "CSV"
+    }
+  },
+  {
+    "event_id": "evt_0039",
+    "event_type": "BoardViewed",
+    "event_timestamp": "2026-03-15T09:00:00Z",
+    "actor_email": "bob@acme.com",
+    "actor_name": "Bob Durand",
+    "target_application_id": "APP_HR",
+    "target_application_name": "HR Analytics",
+    "target_block_id": "BOARD_HC",
+    "metadata": {
+      "boardId": "BOARD_HC",
+      "boardName": "Headcount Dashboard"
+    }
+  },
+  {
+    "event_id": "evt_0040",
+    "event_type": "BoardViewed",
+    "event_timestamp": "2026-03-15T09:15:00Z",
+    "actor_email": "bob@acme.com",
+    "actor_name": "Bob Durand",
+    "target_application_id": "APP_HR",
+    "target_application_name": "HR Analytics",
+    "target_block_id": "BOARD_ATTR",
+    "metadata": {
+      "boardId": "BOARD_ATTR",
+      "boardName": "Attrition Tracker"
+    }
+  }
+]

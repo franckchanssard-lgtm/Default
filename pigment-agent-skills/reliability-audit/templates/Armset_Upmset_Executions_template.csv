@@ -1,0 +1,1 @@
+year,week,week_dim,day,org_id,organization,app_id,app_name,blockId,blockName,changeId,scoped,scoped_level,workers,macroFormula,backingMetricId,jobType,executionId,executionStartedAt,execution_time,computed_rows,deleted_rows,upserted_rows,nb_executions,nb_batch_executions
