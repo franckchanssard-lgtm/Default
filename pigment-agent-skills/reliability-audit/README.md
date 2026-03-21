@@ -87,6 +87,7 @@ L'audit répond à **3 questions fondamentales** :
 | `Executions.csv` | ✅ Oui | Temps d'exécution des metrics | Performance, Scoping, Complexity, DataQuality |
 | `Views_Executions.csv` | ❌ Non | Temps de rendu des views/boards | Workload |
 | `Armset_Upmset.csv` | ❌ Non | Exécutions ARM/UPM (sécurité) | AccessRights |
+| `Audit_Logs.csv` | ❌ Non | Activité utilisateur + permissions | Usage, Permission |
 
 ### Clés API
 
@@ -94,6 +95,7 @@ L'audit répond à **3 questions fondamentales** :
 |-----|-------------|-------------------|
 | Metadata API | ❌ Non | Vrais noms (apps, blocks), dimensions, versions |
 | Audit Logs API | ❌ Non | Usage réel, power users, changements, permissions |
+| Audit Logs CSV (local) | ❌ Non | Même usage que l'API, via fichier CSV |
 
 ---
 
@@ -119,13 +121,14 @@ L'audit répond à **3 questions fondamentales** :
 | KPI | Description | Seuils |
 |-----|-------------|--------|
 | `fully_scoped_pct` | % de formules FullyScoped | Cible: > 50% |
-| `no_change_pct` | % de formules non scopées | Critical: > 50% |
-| `potential_savings_ms` | Temps économisable avec scoping | Indicateur ROI |
+| `partially_scoped_pct` | % de formules PartiallyScoped | Alerte si élevé |
+| `partially_scoped_time_pct` | % du temps de calcul PartiallyScoped | KPI clé |
+| `potential_savings_ms` | Temps économisable si mieux scoped | Indicateur ROI |
 
 **Explication du scoping:**
 - `FullyScoped`: Seules les cellules impactées sont recalculées ✅
 - `PartiallyScoped`: Recalcul partiel ⚠️
-- `NoChange`: Tout est recalculé à chaque fois ❌
+- `NoChange`: Aucun changement de résultat (exécution idempotente) ✅
 
 ---
 
@@ -325,6 +328,13 @@ python -m src.main \
   --armset data/Armset_Upmset.csv \
   --metadata-key "pk_xxx" \
   --audit-key "ak_xxx"
+
+# Complet (CSV Audit Logs local)
+python -m src.main \
+  --executions data/Executions.csv \
+  --views data/Views.csv \
+  --armset data/Armset_Upmset.csv \
+  --audit-log-file data/Audit_Logs.csv
 ```
 
 ### Options CLI
@@ -336,6 +346,7 @@ python -m src.main \
 | `--armset PATH` | Chemin vers Armset_Upmset CSV |
 | `--metadata-key KEY` | Clé API Metadata |
 | `--audit-key KEY` | Clé API Audit Logs |
+| `--audit-log-file PATH` | Fichier Audit Logs local (JSON ou CSV) |
 | `--web` | Lancer l'interface web |
 | `--port PORT` | Port pour l'interface web (défaut: 8080) |
 | `--format FORMAT` | Format de sortie: csv, html, all |

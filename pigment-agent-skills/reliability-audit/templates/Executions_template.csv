@@ -1,0 +1,1 @@
+year,week,week_dim,week final,day,org_id,organization_name,application,app_name,metric_id,metric_name,jobType,scoped,scoped_level,changeId,scenarioId,scenarioName,executionStartedAt,execution_time,computed_rows,updated_rows,upserted_rows,nb_executions,nb_batch_executions,executionId,dims,nb_dims,Exclude,Exclude app

@@ -79,6 +79,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .stat-value { font-size: 1.4rem; font-weight: 700; }
 .stat-label { font-size: .63rem; color: #6b7280; margin-top: .2rem;
               text-transform: uppercase; letter-spacing: .04em; }
+.stat-help { font-size: .64rem; color: #9ca3af; margin-top: .2rem; line-height: 1.2; }
+.insight-help { font-size: .72rem; color: #6b7280; margin-bottom: .35rem; }
 
 /* ── Tables ── */
 table { width: 100%; border-collapse: collapse; font-size: .83rem; }
@@ -723,8 +725,8 @@ class ReportGenerator:
             return ""
 
         sc = score.scoping_result
-        no_change_time_pct = getattr(sc, "no_change_time_pct", sc.no_change_pct)
-        time_color = self._score_color(100 - no_change_time_pct)
+        partially_scoped_time_pct = getattr(sc, "partially_scoped_time_pct", 0.0)
+        time_color = self._score_color(100 - partially_scoped_time_pct)
         savings    = self._fmt_ms(sc.potential_savings_ms)
 
         rows = ""
@@ -746,8 +748,8 @@ class ReportGenerator:
                 '<h3 style="font-size:.87rem;font-weight:600;color:#374151;margin:.75rem 0 .4rem">'
                 'Top optimization candidates</h3>'
                 '<p style="font-size:.74rem;color:#6b7280;margin-bottom:.7rem">'
-                'These metrics recalculate everything every time (NoChange). '
-                'Adding <code>BY</code> / <code>FILTER</code> modifiers to their formulas would reduce compute.'
+                'These metrics are partially scoped and still recalculate more than needed. '
+                'Refine scoping with <code>FILTER</code>/<code>SELECT</code> early, then <code>BY</code>/<code>REMOVE</code>.'
                 '</p>'
                 '<div class="tbl-wrap"><table>'
                 '<thead><tr><th>Metric</th><th>Application</th><th>Avg Time</th>'
@@ -770,11 +772,11 @@ class ReportGenerator:
     </div>
     <div class="stat">
       <div class="stat-value" style="color:#ef4444">{sc.no_change_pct:.0f}%</div>
-      <div class="stat-label">Not Scoped (count)</div>
+      <div class="stat-label">No Change (count)</div>
     </div>
     <div class="stat">
-      <div class="stat-value" style="color:{time_color}">{no_change_time_pct:.0f}%</div>
-      <div class="stat-label">Not Scoped (time) ⬅ key</div>
+      <div class="stat-value" style="color:{time_color}">{partially_scoped_time_pct:.0f}%</div>
+      <div class="stat-label">Partially Scoped (time) ⬅ key</div>
     </div>
     <div class="stat">
       <div class="stat-value">{savings}</div>
@@ -783,8 +785,9 @@ class ReportGenerator:
   </div>
 
   <p style="font-size:.74rem;color:#6b7280;background:#f8fafc;padding:.6rem .8rem;border-radius:.4rem;margin-bottom:1rem">
-    ⓘ <strong>Not Scoped (time)</strong> is what matters for the score: it measures what % of total compute time
-    is wasted on unscoped formulas. A high count-based % with low time (fast unscoped formulas) is not actionable.
+    ⓘ <strong>Partially Scoped (time)</strong> drives the score: it measures how much compute time could
+    be reduced by refining scoping. <strong>No Change</strong> means the execution produced no output changes
+    and does not indicate poor scoping.
   </p>
 
   {table}
@@ -1025,36 +1028,44 @@ class ReportGenerator:
     <div class="stat">
       <div class="stat-value">{dq.data_quality_score:.0f}</div>
       <div class="stat-label">Data Quality</div>
+      <div class="stat-help">Freshness + stability of metric executions.</div>
     </div>
     <div class="stat">
       <div class="stat-value">{dq.process_reliability_score:.0f}</div>
       <div class="stat-label">Process Reliability</div>
+      <div class="stat-help">Batch completeness + scenario coverage.</div>
     </div>
     <div class="stat">
       <div class="stat-value" style="color:{stale_color}">{total_stale}</div>
       <div class="stat-label">Stale Metrics</div>
+      <div class="stat-help">No execution in &gt;7 days.</div>
     </div>
     <div class="stat">
       <div class="stat-value" style="color:{stale_color}">{dq.very_stale_metrics}</div>
       <div class="stat-label">Very Stale (&gt;30d)</div>
+      <div class="stat-help">No execution in &gt;30 days.</div>
     </div>
     <div class="stat">
       <div class="stat-value">
         <span class="{trend_css}">{trend_arrow} {abs(wow_change):.0f}%</span>
       </div>
       <div class="stat-label">WoW Perf Trend</div>
+      <div class="stat-help">Weekly change in avg exec time.</div>
     </div>
     <div class="stat">
       <div class="stat-value">{missing_batch_html}</div>
       <div class="stat-label">Batch Reliability</div>
+      <div class="stat-help">Days where expected batch runs were missing.</div>
     </div>
     <div class="stat">
       <div class="stat-value">{dq.changes_per_day:.1f}</div>
       <div class="stat-label">Changes / Day</div>
+      <div class="stat-help">Avg model changes detected daily.</div>
     </div>
     <div class="stat">
       <div class="stat-value">{dq.highly_unstable_metrics}</div>
       <div class="stat-label">Highly Unstable Metrics</div>
+      <div class="stat-help">High variance (CV &gt; 1.0).</div>
     </div>
   </div>
 
@@ -1062,6 +1073,7 @@ class ReportGenerator:
 
   <div style="margin-top:1rem">
     <div style="font-size:.78rem;font-weight:600;color:#374151;margin-bottom:.4rem">Key insights</div>
+    <div class="insight-help">Derived from freshness, variability, scenarios, and batch signals.</div>
     {insights_html}
   </div>
 </div>"""
@@ -1137,7 +1149,7 @@ class ReportGenerator:
     <div class="glossary-grid">
       <div class="glossary-item"><b>FullyScoped</b> <i>— only cells impacted by a data change are recalculated (optimal ✅)</i></div>
       <div class="glossary-item"><b>PartiallyScoped</b> <i>— partial scope, some unnecessary recalculation occurs ⚠️</i></div>
-      <div class="glossary-item"><b>NoChange</b> <i>— no scoping configured; the entire metric recalculates every time ❌</i></div>
+      <div class="glossary-item"><b>NoChange</b> <i>— execution produced no output change; follow-up executions may be skipped ✅</i></div>
       <div class="glossary-item"><b>ARM</b> <i>— Access Rights Metric: controls which data rows a user can see</i></div>
       <div class="glossary-item"><b>UPM</b> <i>— User Permission Metric: controls which actions a user can perform</i></div>
       <div class="glossary-item"><b>P75 / P95</b> <i>— execution time at the 75th / 95th percentile (not the average)</i></div>

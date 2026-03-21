@@ -9,11 +9,12 @@ Small, realistic sample data for demonstrating the Reliability Audit tool.
 | `Executions_demo.csv` | 25 | Metric executions across 4 apps |
 | `Views_Executions_demo.csv` | 16 | Board views with usage patterns |
 | `Armset_Upmset_Executions_demo.csv` | 13 | Access rights computations |
+| `Audit_Logs_demo.json` | 40 | Audit log events for usage and permissions |
 
 ## Scenario
 
 **Organization**: Acme Corp (DEMO_ORG)
-**Time Period**: Feb 10-12, 2026 (3 days)
+**Time Period**: Mar 4-15, 2026 (demo events in last 30 days)
 
 ### Applications
 
@@ -40,7 +41,8 @@ cd pigment-agent-skills/reliability-audit
 python -m src.main \
   --executions demo-data/Executions_demo.csv \
   --views demo-data/Views_Executions_demo.csv \
-  --armset demo-data/Armset_Upmset_Executions_demo.csv
+  --armset demo-data/Armset_Upmset_Executions_demo.csv \
+  --audit-log-file demo-data/Audit_Logs_demo.json
 
 # Web mode
 python -m src.main --web
