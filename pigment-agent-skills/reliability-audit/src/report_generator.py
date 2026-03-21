@@ -10,7 +10,7 @@ from typing import List
 from datetime import datetime
 
 from .config import Config
-from .scoring import ReliabilityScore
+from .scoring import ReliabilityScore, ActionItem, ActionPlan
 
 
 # ── CSS kept as a plain string so CSS braces never conflict with f-string syntax ──
@@ -139,6 +139,71 @@ summary { cursor: pointer; font-size: .84rem; font-weight: 600; color: #4b5563; 
 .glossary-item i { color: #6b7280; font-style: normal; }
 
 h2 { scroll-margin-top: 3.5rem; }
+
+/* ── Action Plan ── */
+.action-group { margin-bottom: 1.5rem; }
+.action-group-header { font-size: .72rem; font-weight: 700; text-transform: uppercase;
+                       letter-spacing: .06em; color: #6b7280; margin-bottom: .6rem;
+                       padding-bottom: .35rem; border-bottom: 1px solid #e5e7eb;
+                       display: flex; align-items: center; gap: .5rem; }
+.action-card { background: #f8fafc; border-radius: .6rem; padding: 1rem 1.2rem;
+               margin-bottom: .7rem; border-left: 4px solid #94a3b8; }
+.action-card.p0 { border-left-color: #dc2626; background: #fef2f2; }
+.action-card.p1 { border-left-color: #f59e0b; background: #fffbeb; }
+.action-card.p2 { border-left-color: #3b82f6; background: #eff6ff; }
+.action-card.p3 { border-left-color: #22c55e; background: #f0fdf4; }
+
+.action-header { display: flex; align-items: flex-start; justify-content: space-between;
+                 gap: .75rem; margin-bottom: .5rem; flex-wrap: wrap; }
+.action-title { font-size: .9rem; font-weight: 700; color: #111827; flex: 1; }
+.action-badges { display: flex; gap: .35rem; flex-shrink: 0; flex-wrap: wrap; }
+.action-badge { padding: .15rem .4rem; border-radius: .25rem; font-size: .62rem;
+                font-weight: 700; text-transform: uppercase; }
+.badge-p0 { background: #fee2e2; color: #dc2626; }
+.badge-p1 { background: #fef3c7; color: #d97706; }
+.badge-p2 { background: #dbeafe; color: #2563eb; }
+.badge-p3 { background: #dcfce7; color: #16a34a; }
+.badge-quick  { background: #dcfce7; color: #16a34a; }
+.badge-medium { background: #fef3c7; color: #d97706; }
+.badge-large  { background: #fee2e2; color: #dc2626; }
+.badge-cat { background: #e5e7eb; color: #374151; }
+
+.action-impact { font-size: .82rem; color: #4b5563; margin-bottom: .6rem;
+                 font-style: italic; }
+.action-score-impact { font-size: .72rem; color: #6366f1; font-weight: 600;
+                       margin-bottom: .5rem; }
+
+.action-steps { margin: .5rem 0; padding-left: 0; list-style: none; counter-reset: step; }
+.action-steps li { font-size: .8rem; color: #374151; padding: .25rem 0 .25rem 1.8rem;
+                   position: relative; line-height: 1.45; }
+.action-steps li::before { counter-increment: step; content: counter(step);
+                           position: absolute; left: 0; width: 1.3rem; height: 1.3rem;
+                           background: #e5e7eb; border-radius: 50%; text-align: center;
+                           font-size: .65rem; font-weight: 700; line-height: 1.3rem;
+                           color: #4b5563; top: .25rem; }
+.action-card.p0 .action-steps li::before { background: #fee2e2; color: #dc2626; }
+.action-card.p1 .action-steps li::before { background: #fef3c7; color: #d97706; }
+.action-card.p2 .action-steps li::before { background: #dbeafe; color: #2563eb; }
+
+.action-guidance { background: #1e293b; color: #e2e8f0; border-radius: .4rem;
+                   padding: .65rem .85rem; margin: .5rem 0; font-family: 'SF Mono',
+                   'Fira Code', monospace; font-size: .72rem; line-height: 1.55;
+                   white-space: pre-wrap; overflow-x: auto; }
+
+.action-affected { font-size: .72rem; color: #6b7280; margin-top: .4rem; }
+.action-affected code { background: #e5e7eb; padding: .1rem .3rem; border-radius: .2rem;
+                        font-size: .68rem; }
+
+.action-depends { font-size: .72rem; color: #9333ea; margin-top: .35rem; font-style: italic; }
+
+.sequence-note { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: .5rem;
+                 padding: .85rem 1.1rem; margin-bottom: 1.25rem; font-size: .82rem;
+                 line-height: 1.6; color: #0c4a6e; white-space: pre-line; }
+
+.quick-wins-banner { background: linear-gradient(135deg, #dcfce7, #f0fdf4);
+                     border: 1px solid #bbf7d0; border-radius: .5rem;
+                     padding: .75rem 1rem; margin-bottom: 1rem;
+                     font-size: .82rem; color: #166534; }
 """
 
 
@@ -282,7 +347,7 @@ class ReportGenerator:
 <nav class="nav">
   <span class="nav-brand">Pigment Audit</span>
   <a href="#overview">Overview</a>
-  <a href="#recommendations">Recommendations</a>
+  <a href="#action-plan">Action Plan</a>
   <a href="#performance">Performance</a>
   <a href="#scoping">Scoping</a>
   <a href="#complexity">Complexity</a>
@@ -295,7 +360,7 @@ class ReportGenerator:
 <div class="page">
   {self._render_alerts(score)}
   {self._render_overview(score)}
-  {self._render_recommendations(score)}
+  {self._render_action_plan(score)}
   {self._render_performance_findings(score)}
   {self._render_scoping_analysis(score)}
   {self._render_complexity_findings(score)}
@@ -451,34 +516,131 @@ class ReportGenerator:
   </div>
 </div>"""
 
-    def _render_recommendations(self, score: ReliabilityScore) -> str:
-        if not score.recommendations:
+    def _render_action_plan(self, score: ReliabilityScore) -> str:
+        plan = score.action_plan
+        if not plan or not plan.actions:
             return ""
 
-        critical = [r for r in score.recommendations if self._rec_priority(r) == "critical"]
-        high     = [r for r in score.recommendations if self._rec_priority(r) == "high"]
-        info     = [r for r in score.recommendations if self._rec_priority(r) == "info"]
+        # Summary counts
+        n_p0 = len(plan.blockers)
+        n_p1 = len(plan.urgent)
+        n_p2 = len(plan.important)
+        n_p3 = len(plan.improvements)
+        n_qw = len(plan.quick_wins)
+        total = len(plan.actions)
 
-        def group(label, recs, css):
-            if not recs:
-                return ""
-            items = "\n".join(f'<div class="rec {css}">{r}</div>' for r in recs)
-            return f'<div class="rec-group"><div class="rec-group-label">{label}</div>{items}</div>'
+        # Sequence note
+        seq_html = ""
+        if plan.sequence_note:
+            seq_html = f'<div class="sequence-note"><strong>Recommended sequence:</strong>\n{plan.sequence_note}</div>'
 
-        body  = group("🔴 Critical — act immediately", critical, "rec-critical")
-        body += group("⚠️ High priority", high, "rec-high")
-        body += group("💡 Insights &amp; improvements", info, "rec-info")
+        # Quick wins banner
+        qw_html = ""
+        if n_qw > 0:
+            qw_titles = ", ".join(a.title for a in plan.quick_wins[:3])
+            more = f" (+{n_qw - 3} more)" if n_qw > 3 else ""
+            qw_html = (
+                f'<div class="quick-wins-banner">'
+                f'⚡ <strong>{n_qw} Quick Win{"s" if n_qw > 1 else ""}:</strong> '
+                f'{qw_titles}{more}'
+                f'</div>'
+            )
 
-        total = len(score.recommendations)
-        return f"""<div class="card" id="recommendations">
+        # Render action groups
+        groups_html = ""
+        group_defs = [
+            ("P0", plan.blockers, "🚨 Blockers — resolve before anything else"),
+            ("P1", plan.urgent, "⚠️ Urgent — high impact, act this week"),
+            ("P2", plan.important, "📋 Important — plan for this sprint/month"),
+            ("P3", plan.improvements, "💡 Improvements — when capacity allows"),
+        ]
+
+        for priority, items, label in group_defs:
+            if not items:
+                continue
+            cards = "\n".join(self._render_action_card(a) for a in items)
+            groups_html += (
+                f'<div class="action-group">'
+                f'<div class="action-group-header">{label} ({len(items)})</div>'
+                f'{cards}'
+                f'</div>'
+            )
+
+        return f"""<div class="card" id="action-plan">
   <div class="section-title">
-    💡 Recommendations
+    🎯 Action Plan
     <small style="font-size:.75rem;font-weight:400;color:#6b7280">
-      {total} total · {len(critical)} critical · {len(high)} high · {len(info)} info
+      {total} actions · {n_p0} blockers · {n_p1} urgent · {n_p2} important · {n_p3} improvements · {n_qw} quick wins
     </small>
   </div>
-  {body}
+  {seq_html}
+  {qw_html}
+  {groups_html}
 </div>"""
+
+    def _render_action_card(self, action: ActionItem) -> str:
+        p = action.priority.lower()
+
+        # Badges
+        effort_labels = {"quick": "< 1h", "medium": "1h–1d", "large": "> 1d"}
+        badges = (
+            f'<span class="action-badge badge-{p}">{action.priority}</span>'
+            f'<span class="action-badge badge-{action.effort}">{effort_labels.get(action.effort, action.effort)}</span>'
+            f'<span class="action-badge badge-cat">{action.category}</span>'
+        )
+
+        # Impact
+        impact_html = f'<div class="action-impact">→ {action.impact}</div>' if action.impact else ""
+
+        # Score impact
+        score_html = f'<div class="action-score-impact">📈 {action.score_impact}</div>' if action.score_impact else ""
+
+        # Steps
+        steps_html = ""
+        if action.steps:
+            items = "\n".join(f"<li>{s}</li>" for s in action.steps)
+            steps_html = f'<ol class="action-steps">{items}</ol>'
+
+        # Pigment guidance (code block)
+        guidance_html = ""
+        if action.pigment_guidance:
+            escaped = action.pigment_guidance.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            guidance_html = (
+                f'<details><summary style="font-size:.75rem;font-weight:600;color:#6366f1;cursor:pointer">'
+                f'Show Pigment formula guidance</summary>'
+                f'<div class="action-guidance">{escaped}</div></details>'
+            )
+
+        # Affected items
+        affected_html = ""
+        if action.affected_items:
+            items_str = " ".join(f"<code>{name}</code>" for name in action.affected_items[:5])
+            more = f" +{len(action.affected_items) - 5} more" if len(action.affected_items) > 5 else ""
+            affected_html = f'<div class="action-affected">Affects: {items_str}{more}</div>'
+
+        # Dependencies
+        depends_html = ""
+        if action.depends_on:
+            deps = action.depends_on if isinstance(action.depends_on, list) else [action.depends_on]
+            deps = [d for d in deps if d]
+            if deps:
+                deps_str = ", ".join(f'"{d}"' for d in deps)
+                depends_html = f'<div class="action-depends">⤷ Do after: {deps_str}</div>'
+
+        return (
+            f'<div class="action-card {p}">'
+            f'<div class="action-header">'
+            f'<div class="action-title">{action.title}</div>'
+            f'<div class="action-badges">{badges}</div>'
+            f'</div>'
+            f'{impact_html}'
+            f'{score_html}'
+            f'{steps_html}'
+            f'{guidance_html}'
+            f'{affected_html}'
+            f'{depends_html}'
+            f'</div>'
+        )
 
     def _render_performance_findings(self, score: ReliabilityScore) -> str:
         if not score.performance_result:
