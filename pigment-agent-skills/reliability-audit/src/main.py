@@ -18,7 +18,7 @@ Options:
     --web               Start web interface for CSV upload
     --metadata-key KEY  Pigment Metadata API key for name enrichment
     --audit-key KEY     Pigment Audit Logs API key
-    --audit-log-file PATH  Path to a local Audit Logs JSON file (demo/offline)
+    --audit-log-file PATH  Path to a local Audit Logs JSON/CSV file (offline)
 """
 
 import argparse
@@ -178,7 +178,7 @@ Examples:
         "--audit-log-file",
         type=str,
         default=None,
-        help="Path to local Audit Logs JSON file (demo/offline)"
+        help="Path to local Audit Logs JSON/CSV file (offline)"
     )
     parser.add_argument(
         "--port",
@@ -220,11 +220,11 @@ Examples:
 
     # Set default paths if not provided
     if not config.executions_csv:
-        config.executions_csv = "sample-data/Executions_anonymized_basic.csv"
+        config.executions_csv = "examples/benchmark/Executions_anonymized_basic.csv"
     if not config.views_csv:
-        config.views_csv = "sample-data/Views_Executions_anonymized_basic.csv"
+        config.views_csv = "examples/benchmark/Views_Executions_anonymized_basic.csv"
     if not config.armset_csv:
-        config.armset_csv = "sample-data/Armset_Upmset_Executions_anonymized_basic.csv"
+        config.armset_csv = "examples/benchmark/Armset_Upmset_Executions_anonymized_basic.csv"
 
     # Load data
     if not args.quiet:

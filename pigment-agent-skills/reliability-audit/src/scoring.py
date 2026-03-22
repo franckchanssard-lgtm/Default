@@ -18,6 +18,7 @@ from .analyzers import (
     PermissionAnalyzer,
     AccessRightsAnalyzer,
     DataQualityAnalyzer,
+    ChangeImpactAnalyzer,
 )
 from .analyzers.performance_analyzer import PerformanceAnalysisResult
 from .analyzers.scoping_analyzer import ScopingAnalysisResult
@@ -28,6 +29,7 @@ from .analyzers.version_analyzer import VersionAnalysisResult
 from .analyzers.permission_analyzer import PermissionAnalysisResult
 from .analyzers.access_rights_analyzer import AccessRightsAnalysisResult
 from .analyzers.data_quality_analyzer import DataQualityResult
+from .analyzers.change_impact_analyzer import ChangeImpactAnalysisResult
 from .api_client import MetadataAPIClient, AuditLogsAPIClient, AuditLogsFileClient, APIEnricher
 
 
@@ -106,6 +108,7 @@ class ReliabilityScore:
     permission_result: PermissionAnalysisResult = None
     access_rights_result: AccessRightsAnalysisResult = None
     data_quality_result: DataQualityResult = None
+    change_impact_result: ChangeImpactAnalysisResult = None
 
     # Top recommendations (legacy flat list, kept for backward compat)
     recommendations: List[str] = field(default_factory=list)
@@ -121,6 +124,7 @@ class ReliabilityScore:
     permission_analysis_enabled: bool = False
     access_rights_analysis_enabled: bool = False
     data_quality_analysis_enabled: bool = False
+    change_impact_analysis_enabled: bool = False
 
     # Trust score (from data quality analysis)
     trust_score: float = 0.0
@@ -236,6 +240,21 @@ class ReliabilityScorer:
 
             # Run usage analysis if audit client available
             if self.enricher.audit_client:
+                # Run action attribution: which audit-log actions triggered which metric changes
+                if data.has_executions:
+                    try:
+                        print("Running action attribution analysis (audit logs -> changeId roots)...")
+                        change_impact_analyzer = ChangeImpactAnalyzer(self.enricher.audit_client)
+                        result.change_impact_result = change_impact_analyzer.analyze(data.executions)
+                        result.change_impact_analysis_enabled = True
+                        print(
+                            "Action attribution complete: "
+                            f"{result.change_impact_result.last_24h_matched_changes} matched root changes "
+                            f"in last {result.change_impact_result.analysis_window_hours}h window"
+                        )
+                    except Exception as e:
+                        print(f"Warning: Action attribution analysis failed: {e}")
+
                 try:
                     print("Running usage analysis from Audit Logs...")
                     usage_analyzer = UsageAnalyzer(self.enricher.audit_client)
@@ -409,20 +428,6 @@ class ReliabilityScorer:
 
         # ── 1. Performance ────────────────────────────────────────────────
         self._plan_performance(result, actions)
-
-        # Complexity recommendations
-        complexity = result.complexity_result
-        if complexity and complexity.critical_count > 0:
-            recommendations.append(
-                f"🔴 {complexity.critical_count} metrics have > 10 dimensions. "
-                "Replace redundant dimensions with properties and avoid over-dimensionalizing metrics."
-            )
-
-        if complexity and complexity.avg_dimensions > 5:
-            recommendations.append(
-                f"⚠️ Average dimensions per metric is {complexity.avg_dimensions:.1f}. "
-                "High dimensionality impacts performance — remove non-essential dimensions or use properties."
-            )
         # ── 2. Scoping ────────────────────────────────────────────────────
         self._plan_scoping(result, actions)
 
@@ -434,12 +439,6 @@ class ReliabilityScorer:
 
         # ── 5. Access Rights (ARM/UPM) ────────────────────────────────────
         self._plan_access_rights(result, actions)
-
-        if workload and workload.slow_views_pct > 20:
-            recommendations.append(
-                f"⚠️ {workload.slow_views_pct:.0f}% of views are slow (> 3s). "
-                "Add page selectors/filters, prefer summary widgets, and avoid large sparse views."
-            )
         # ── 6. Data Quality & Process Reliability ─────────────────────────
         self._plan_data_quality(result, actions)
 

@@ -6,7 +6,7 @@ Produces three CSV files spanning 6 weeks (2026-01-12 to 2026-02-20):
   - Views_Executions_demo.csv (~180 rows, 11 boards, some slow views)
   - Armset_Upmset_Executions_demo.csv (~160 rows, 10 blocks with proper blockIds)
 
-Run from the demo-data/ directory:
+Run from the examples/demo/ directory:
     python generate_demo.py
 """
 

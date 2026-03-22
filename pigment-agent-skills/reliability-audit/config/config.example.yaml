@@ -4,9 +4,9 @@
 # Data sources
 data_sources:
   # CSV files (relative to reliability-audit folder or absolute paths)
-  executions_csv: "sample-data/Executions_anonymized_basic.csv"
-  views_csv: "sample-data/Views_Executions_anonymized_basic.csv"
-  armset_csv: "sample-data/Armset_Upmset_Executions_anonymized_basic.csv"
+  executions_csv: "examples/benchmark/Executions_anonymized_basic.csv"
+  views_csv: "examples/benchmark/Views_Executions_anonymized_basic.csv"
+  armset_csv: "examples/benchmark/Armset_Upmset_Executions_anonymized_basic.csv"
 
 # API Configuration (optional - for enrichment)
 api:

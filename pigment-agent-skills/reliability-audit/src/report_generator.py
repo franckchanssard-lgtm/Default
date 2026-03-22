@@ -316,6 +316,75 @@ class ReportGenerator:
                     ])
             files.append(str(complexity_file))
 
+        if score.change_impact_analysis_enabled and score.change_impact_result:
+            impact = score.change_impact_result
+
+            if impact.last_24h_impacts:
+                impact_file = output_dir / f"metric_action_impacts_24h_{timestamp}.csv"
+                with open(impact_file, "w", newline="") as f:
+                    writer = csv.writer(f)
+                    writer.writerow([
+                        "Metric ID",
+                        "Metric Name",
+                        "Application",
+                        "Change ID",
+                        "Root Execution Timestamp",
+                        "Matched Event Timestamp",
+                        "Matched Event Type",
+                        "Matched Event ID",
+                        "Actor Email",
+                        "Actor Name",
+                        "Matched Block ID",
+                        "Matched Application ID",
+                        "Match Type",
+                        "Seconds Action->Execution",
+                    ])
+                    for item in impact.last_24h_impacts:
+                        writer.writerow([
+                            item.metric_id,
+                            item.metric_name,
+                            item.application,
+                            item.change_id,
+                            item.root_execution_timestamp,
+                            item.matched_event_timestamp,
+                            item.matched_event_type,
+                            item.matched_event_id,
+                            item.actor_email,
+                            item.actor_name,
+                            item.matched_block_id,
+                            item.matched_application_id,
+                            item.match_type,
+                            item.seconds_from_action_to_execution,
+                        ])
+                files.append(str(impact_file))
+
+            if impact.metrics_impacted_last_24h:
+                summary_file = output_dir / f"metric_action_summary_24h_{timestamp}.csv"
+                with open(summary_file, "w", newline="") as f:
+                    writer = csv.writer(f)
+                    writer.writerow([
+                        "Metric ID",
+                        "Metric Name",
+                        "Application",
+                        "Impacted Changes (24h)",
+                        "Matched Actions (24h)",
+                        "Unique Actors (24h)",
+                        "Top Action Types",
+                        "Latest Action Timestamp",
+                    ])
+                    for item in impact.metrics_impacted_last_24h:
+                        writer.writerow([
+                            item.metric_id,
+                            item.metric_name,
+                            item.application,
+                            item.impacted_changes,
+                            item.matched_actions,
+                            item.unique_actors,
+                            item.top_action_types,
+                            item.latest_action_timestamp,
+                        ])
+                files.append(str(summary_file))
+
         return files
 
     # ──────────────────────────────────────────────────────────────────────────
@@ -327,12 +396,15 @@ class ReportGenerator:
 
         has_trust = bool(score.data_quality_analysis_enabled and score.data_quality_result)
         has_ar    = bool(score.access_rights_analysis_enabled and score.access_rights_result)
+        has_change_impact = bool(score.change_impact_analysis_enabled and score.change_impact_result)
 
         nav_extra = ""
         if has_trust:
             nav_extra += '<a href="#trust">Trust &amp; Data</a>'
         if has_ar:
             nav_extra += '<a href="#access-rights">Access Rights</a>'
+        if has_change_impact:
+            nav_extra += '<a href="#change-impact">Action Impact</a>'
 
         html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -367,6 +439,7 @@ class ReportGenerator:
   {self._render_workload_analysis(score)}
   {self._render_trust_section(score) if has_trust else ''}
   {self._render_access_rights_section(score) if has_ar else ''}
+  {self._render_change_impact_section(score) if has_change_impact else ''}
   {self._render_glossary()}
 </div>
 
@@ -1139,6 +1212,120 @@ class ReportGenerator:
   </div>
 
   {table}
+</div>"""
+
+    def _render_change_impact_section(self, score: ReliabilityScore) -> str:
+        """Action attribution section: audit log actions -> metric impacts."""
+        impact = score.change_impact_result
+        if not impact:
+            return ""
+
+        match_rate = (
+            (impact.matched_root_changes / impact.total_root_changes) * 100
+            if impact.total_root_changes else 0.0
+        )
+        exact_matches = impact.exact_block_app_matches + impact.exact_block_matches
+        exact_rate = (
+            (exact_matches / impact.matched_root_changes) * 100
+            if impact.matched_root_changes else 0.0
+        )
+
+        summary_rows = ""
+        for item in impact.metrics_impacted_last_24h[:20]:
+            summary_rows += (
+                f"<tr>"
+                f"<td>{item.metric_name or item.metric_id}</td>"
+                f"<td><small style='color:#9ca3af'>{item.application}</small></td>"
+                f"<td>{item.impacted_changes}</td>"
+                f"<td>{item.matched_actions}</td>"
+                f"<td>{item.unique_actors}</td>"
+                f"<td><small style='color:#6b7280'>{item.top_action_types}</small></td>"
+                f"</tr>"
+            )
+
+        details_rows = ""
+        for item in impact.last_24h_impacts[:30]:
+            details_rows += (
+                f"<tr>"
+                f"<td>{item.metric_name or item.metric_id}</td>"
+                f"<td>{item.matched_event_type}</td>"
+                f"<td>{item.actor_email or item.actor_name or 'unknown'}</td>"
+                f"<td><small style='color:#6b7280'>{item.matched_event_timestamp}</small></td>"
+                f"<td>{item.match_type}</td>"
+                f"<td>{item.seconds_from_action_to_execution:.0f}s</td>"
+                f"</tr>"
+            )
+
+        summary_table = ""
+        if summary_rows:
+            summary_table = (
+                '<div class="tbl-wrap"><table>'
+                '<thead><tr><th>Metric</th><th>Application</th><th>Changes (24h)</th>'
+                '<th>Actions (24h)</th><th>Actors</th><th>Top Actions</th></tr></thead>'
+                f"<tbody>{summary_rows}</tbody>"
+                "</table></div>"
+            )
+        else:
+            summary_table = (
+                '<p style="font-size:.8rem;color:#6b7280">'
+                "No matched metric impacts in the last 24h window."
+                "</p>"
+            )
+
+        details_table = ""
+        if details_rows:
+            details_table = (
+                '<details style="margin-top:1rem"><summary>Show matched action details (last 24h)</summary>'
+                '<div class="tbl-wrap" style="margin-top:.75rem"><table>'
+                '<thead><tr><th>Metric</th><th>Action</th><th>Actor</th><th>Action Time</th>'
+                '<th>Match</th><th>Delay</th></tr></thead>'
+                f"<tbody>{details_rows}</tbody>"
+                "</table></div></details>"
+            )
+
+        insights_html = "".join(
+            f"<div style='font-size:.81rem;color:#4b5563;padding:.25rem 0'>{line}</div>"
+            for line in impact.insights[:4]
+        )
+
+        return f"""<div class="card" id="change-impact">
+  <div class="section-title">🔗 Action-to-Metric Impact (Audit Logs)</div>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-value">{impact.total_root_changes:,}</div>
+      <div class="stat-label">Root Changes</div>
+      <div class="stat-help">First execution per changeId.</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">{match_rate:.1f}%</div>
+      <div class="stat-label">Matched</div>
+      <div class="stat-help">Root changes linked to an action.</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">{exact_rate:.1f}%</div>
+      <div class="stat-label">Exact Block-ID Match</div>
+      <div class="stat-help">Metric ID matched audit block ID.</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">{impact.last_24h_matched_changes}</div>
+      <div class="stat-label">Matched in Last 24h</div>
+      <div class="stat-help">Window anchored to latest execution timestamp.</div>
+    </div>
+  </div>
+
+  <p style="font-size:.74rem;color:#6b7280;background:#f8fafc;padding:.6rem .8rem;border-radius:.4rem;margin-bottom:1rem">
+    Matching order: <strong>metric_id + application</strong> (exact), then <strong>metric_id</strong>,
+    then same application/time fallback. This supports mixed Audit Logs formats (API/JSON/BigQuery CSV).
+  </p>
+
+  {summary_table}
+  {details_table}
+
+  <div style="margin-top:1rem">
+    <div style="font-size:.78rem;font-weight:600;color:#374151;margin-bottom:.35rem">Attribution insights</div>
+    {insights_html}
+  </div>
 </div>"""
 
     def _render_glossary(self) -> str:
