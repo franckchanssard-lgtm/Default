@@ -28,7 +28,7 @@ Small, realistic sample data for demonstrating the Reliability Audit tool.
 ### Built-in Issues (for demo)
 
 1. **Slow Consolidation** - 15-16s execution time (critical)
-2. **NoChange Scoping** - Margin and Shipping metrics not optimized
+2. **Partially Scoped Formulas** - Margin and Shipping still recalculate more broadly than needed
 3. **Heavy ARM Blocks** - Security compute on large datasets (800K-2M rows)
 4. **High Traffic Slow Board** - Executive Summary: popular but slow
 
@@ -39,10 +39,10 @@ cd pigment-agent-skills/reliability-audit
 
 # CLI mode
 python -m src.main \
-  --executions demo-data/Executions_demo.csv \
-  --views demo-data/Views_Executions_demo.csv \
-  --armset demo-data/Armset_Upmset_Executions_demo.csv \
-  --audit-log-file demo-data/Audit_Logs_demo.json
+  --executions examples/demo/Executions_demo.csv \
+  --views examples/demo/Views_Executions_demo.csv \
+  --armset examples/demo/Armset_Upmset_Executions_demo.csv \
+  --audit-log-file examples/demo/Audit_Logs_demo.json
 
 # Web mode
 python -m src.main --web
@@ -59,6 +59,6 @@ The demo data should produce:
 ### Key Recommendations
 
 1. Optimize Consolidation metric (15s+ execution)
-2. Enable Full Scoping on Margin Analysis
+2. Refine scoping on Margin Analysis
 3. Review ARM performance on Shipping block
 4. Optimize Executive Summary board (high traffic)

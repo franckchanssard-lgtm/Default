@@ -1,46 +1,46 @@
 # Pigment Workspace Reliability Audit
 
-Outil d'audit automatisé pour évaluer la **fiabilité** d'un workspace Pigment.
+Automated audit tool for assessing the **reliability** of a Pigment workspace.
 
-> **Fiabilité** = Performance + Confiance dans les données + Stabilité des processus
+> **Reliability** = Performance + Trust in the data + Process stability
 
 ---
 
-## Table des matières
+## Table of Contents
 
-1. [Méthodologie](#méthodologie)
-2. [Inputs requis](#inputs-requis)
-3. [Les 9 Analyzers](#les-9-analyzers)
-4. [KPIs détaillés](#kpis-détaillés)
+1. [Methodology](#methodology)
+2. [Required Inputs](#required-inputs)
+3. [The 9 Analyzers](#the-9-analyzers)
+4. [Detailed KPIs](#detailed-kpis)
 5. [Scoring](#scoring)
-6. [Utilisation](#utilisation)
-7. [Interprétation des résultats](#interprétation-des-résultats)
+6. [Usage](#usage)
+7. [How to Read the Results](#how-to-read-the-results)
 
 ---
 
-## Méthodologie
+## Methodology
 
-### Philosophie
+### Philosophy
 
-L'audit répond à **3 questions fondamentales** :
+The audit answers **3 core questions**:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  1. PERFORMANCE                                                  │
-│     "Le workspace est-il rapide et optimisé ?"                  │
-│     → Temps d'exécution, scoping, dimensions                    │
+│     "Is the workspace fast and well optimized?"                 │
+│     → Execution time, scoping, dimensions                       │
 ├─────────────────────────────────────────────────────────────────┤
-│  2. CONFIANCE (TRUST)                                           │
-│     "Peut-on faire confiance aux données ?"                     │
-│     → Fraîcheur, stabilité, cohérence                           │
+│  2. TRUST                                                        │
+│     "Can we trust the data?"                                    │
+│     → Freshness, stability, consistency                         │
 ├─────────────────────────────────────────────────────────────────┤
-│  3. GOUVERNANCE                                                  │
-│     "Le workspace est-il bien géré ?"                           │
-│     → Permissions, versions, usage réel                         │
+│  3. GOVERNANCE                                                   │
+│     "Is the workspace managed properly?"                        │
+│     → Permissions, versions, actual usage                       │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Flux de données
+### Data Flow
 
 ```
                          INPUTS
@@ -49,14 +49,14 @@ L'audit répond à **3 questions fondamentales** :
         ▼                  ▼                  ▼
    ┌─────────┐       ┌──────────┐       ┌──────────┐
    │   CSV   │       │ Metadata │       │  Audit   │
-   │  Files  │       │   API    │       │Logs API  │
+   │  Files  │       │   API    │       │ Logs API │
    └────┬────┘       └────┬─────┘       └────┬─────┘
         │                 │                  │
         ▼                 ▼                  ▼
    ┌─────────────────────────────────────────────┐
    │              9 ANALYZERS                     │
    │                                              │
-   │  CSV-based:           API-based:            │
+   │  CSV-based:           API/file-based:       │
    │  • Performance        • Usage               │
    │  • Scoping            • Version             │
    │  • Complexity         • Permission          │
@@ -70,200 +70,203 @@ L'audit répond à **3 questions fondamentales** :
    │              OUTPUTS                         │
    │                                              │
    │  • Performance Score: /100 (Grade A-F)      │
-   │  • Trust Score: /100 (Level HIGH-CRITICAL)  │
-   │  • Recommendations priorisées               │
-   │  • Rapport HTML + CSV                       │
+   │  • Trust Score: /100 (HIGH-CRITICAL)        │
+   │  • Prioritized recommendations              │
+   │  • HTML + CSV report                        │
    └─────────────────────────────────────────────┘
 ```
 
 ---
 
-## Inputs requis
+## Required Inputs
 
-### Fichiers CSV
+### CSV Files
 
-| Fichier | Obligatoire | Contenu | Utilisé par |
-|---------|-------------|---------|-------------|
-| `Executions.csv` | ✅ Oui | Temps d'exécution des metrics | Performance, Scoping, Complexity, DataQuality |
-| `Views_Executions.csv` | ❌ Non | Temps de rendu des views/boards | Workload |
-| `Armset_Upmset.csv` | ❌ Non | Exécutions ARM/UPM (sécurité) | AccessRights |
-| `Audit_Logs.csv` | ❌ Non | Activité utilisateur + permissions | Usage, Permission |
+| File | Required | Content | Used by |
+|------|----------|---------|---------|
+| `Executions.csv` | Yes | Metric execution timings | Performance, Scoping, Complexity, DataQuality |
+| `Views_Executions.csv` | No | Board/view render timings | Workload |
+| `Armset_Upmset.csv` | No | ARM/UPM security executions | AccessRights |
+| `Audit_Logs.csv` | No | User activity and permissions | Usage, Permission |
 
-### Clés API
+### API Keys
 
-| API | Obligatoire | Ce qu'elle apporte |
-|-----|-------------|-------------------|
-| Metadata API | ❌ Non | Vrais noms (apps, blocks), dimensions, versions |
-| Audit Logs API | ❌ Non | Usage réel, power users, changements, permissions |
-| Audit Logs CSV (local) | ❌ Non | Même usage que l'API, via fichier CSV |
+| Source | Required | What it adds |
+|--------|----------|--------------|
+| Metadata API | No | Real names for apps/blocks, dimensions, versions |
+| Audit Logs API | No | Real usage, power users, changes, permissions |
+| Local Audit Logs CSV | No | Same purpose as Audit Logs API, via file import |
+
+### Bundled Datasets
+
+The repo now separates example data into two clear purposes:
+
+- `examples/demo/`: the canonical small dataset for quickly trying the tool and UI
+- `examples/benchmark/`: a larger anonymized dataset for more realistic tests
+- `templates/`: header-only files to help users prepare their own exports
 
 ---
 
-## Les 9 Analyzers
+## The 9 Analyzers
 
 ### 1. PerformanceAnalyzer
-**Source:** `Executions.csv`
-**Question:** Les calculs sont-ils rapides ?
+**Source:** `Executions.csv`  
+**Question:** Are calculations fast?
 
-| KPI | Description | Seuils |
-|-----|-------------|--------|
-| `avg_execution_time_ms` | Temps moyen d'exécution | Watch: 3s, Warning: 5s, Critical: 30s |
-| `p95_execution_time_ms` | 95ème percentile | Alerte si > 10s |
-| `critical_count` | Nb de metrics > 30s | Chaque metric critique = -1 point |
-| `warning_count` | Nb de metrics > 5s | Indicateur d'alerte |
-
----
+| KPI | Description | Thresholds |
+|-----|-------------|------------|
+| `avg_execution_time_ms` | Average execution time | Watch: 3s, Warning: 5s, Critical: 30s |
+| `p95_execution_time_ms` | 95th percentile | Alert if > 10s |
+| `critical_count` | Number of metrics > 30s | Each critical metric is a major issue |
+| `warning_count` | Number of metrics > 5s | Warning indicator |
 
 ### 2. ScopingAnalyzer
-**Source:** `Executions.csv`
-**Question:** Les formules sont-elles optimisées ?
+**Source:** `Executions.csv`  
+**Question:** Are formulas scoped effectively?
 
-| KPI | Description | Seuils |
-|-----|-------------|--------|
-| `fully_scoped_pct` | % de formules FullyScoped | Cible: > 50% |
-| `partially_scoped_pct` | % de formules PartiallyScoped | Alerte si élevé |
-| `partially_scoped_time_pct` | % du temps de calcul PartiallyScoped | KPI clé |
-| `potential_savings_ms` | Temps économisable si mieux scoped | Indicateur ROI |
+| KPI | Description | Thresholds |
+|-----|-------------|------------|
+| `fully_scoped_pct` | % of FullyScoped formulas | Target: > 50% |
+| `partially_scoped_pct` | % of PartiallyScoped formulas | Watch if high |
+| `partially_scoped_time_pct` | % of compute time spent on PartiallyScoped formulas | Key KPI |
+| `potential_savings_ms` | Estimated time that could be saved with better scoping | ROI indicator |
 
-**Explication du scoping:**
-- `FullyScoped`: Seules les cellules impactées sont recalculées ✅
-- `PartiallyScoped`: Recalcul partiel ⚠️
-- `NoChange`: Aucun changement de résultat (exécution idempotente) ✅
-
----
+**Scoping semantics**
+- `FullyScoped`: only impacted cells are recalculated
+- `PartiallyScoped`: recalculation is reduced, but still broader than needed
+- `NoChange`: the execution produced no output change; this is informational, not a scoping penalty
 
 ### 3. ComplexityAnalyzer
-**Source:** `Executions.csv`
-**Question:** Le modèle est-il trop complexe ?
+**Source:** `Executions.csv`  
+**Question:** Is the model too complex?
 
-| KPI | Description | Seuils |
-|-----|-------------|--------|
-| `avg_dimensions` | Nb moyen de dimensions par metric | Alerte si > 5 |
-| `metrics_over_10_dims` | Nb de metrics avec > 10 dimensions | Critical: chaque metric |
-| `avg_computed_rows` | Nb moyen de lignes calculées | Watch: 500K, Critical: 10M |
-| `dims_time_correlation` | Corrélation dimensions ↔ temps | > 0.5 = impact fort |
-
----
+| KPI | Description | Thresholds |
+|-----|-------------|------------|
+| `avg_dimensions` | Average number of dimensions per metric | Watch if > 5 |
+| `metrics_over_10_dims` | Number of metrics with > 10 dimensions | Critical |
+| `avg_computed_rows` | Average computed rows | Watch: 500K, Critical: 10M |
+| `dims_time_correlation` | Correlation between dimensions and execution time | > 0.5 means dimensions materially drive slowness |
 
 ### 4. WorkloadAnalyzer
-**Source:** `Views_Executions.csv`
-**Question:** La charge est-elle équilibrée ?
+**Source:** `Views_Executions.csv`  
+**Question:** Is workload balanced?
 
-| KPI | Description | Seuils |
-|-----|-------------|--------|
-| `slow_views_pct` | % de views > 3s | Alerte si > 20% |
-| `top_app_pct` | % du compute par l'app la plus lourde | Alerte si > 50% |
-| `avg_render_time_ms` | Temps moyen de rendu | Watch: 2s, Critical: 15s |
-
----
+| KPI | Description | Thresholds |
+|-----|-------------|------------|
+| `slow_views_pct` | % of views > 3s | Alert if > 20% |
+| `top_app_pct` | % of compute consumed by the heaviest app | Alert if > 50% |
+| `avg_render_time_ms` | Average render time | Watch: 2s, Critical: 15s |
 
 ### 5. AccessRightsAnalyzer
-**Source:** `Armset_Upmset.csv`
-**Question:** La sécurité impacte-t-elle la performance ?
+**Source:** `Armset_Upmset.csv`  
+**Question:** Are security calculations hurting performance?
 
-| KPI | Description | Seuils |
-|-----|-------------|--------|
-| `pct_time_in_security` | % du compute consommé par ARM/UPM | Alerte si > 20% |
-| `slow_blocks` | Blocks ARM/UPM avec avg > 5s | Liste prioritaire |
-| `frequent_recalc_blocks` | Blocks recalculés > 50 fois | Cascade détectée |
-| `scoping_opportunity` | Executions ARM/UPM non scopées | Optimisation possible |
+| KPI | Description | Thresholds |
+|-----|-------------|------------|
+| `pct_time_in_security` | % of total compute consumed by ARM/UPM | Alert if > 20% |
+| `slow_blocks` | ARM/UPM blocks with avg > 5s | Priority list |
+| `frequent_recalc_blocks` | Blocks recalculated > 50 times | Cascade warning |
+| `scoping_opportunity` | ARM/UPM executions that could be scoped better | Optimization signal |
 
-**Concepts:**
-- **ARM** (Access Rights Metrics): Définit quelles données un user peut VOIR
-- **UPM** (User Permission Metrics): Définit quelles actions un user peut FAIRE
-
----
+**Concepts**
+- **ARM** (Access Rights Metrics): controls what data a user can see
+- **UPM** (User Permission Metrics): controls what actions a user can perform
 
 ### 6. DataQualityAnalyzer
-**Source:** `Executions.csv`
-**Question:** Peut-on faire confiance aux données ?
+**Source:** `Executions.csv`  
+**Question:** Can the data be trusted?
 
 #### 6.1 Data Freshness
-| KPI | Description | Seuils |
-|-----|-------------|--------|
-| `stale_metrics` | Metrics sans exécution depuis > 7j | Données potentiellement obsolètes |
-| `very_stale_metrics` | Metrics sans exécution depuis > 30j | Données probablement obsolètes |
-| `avg_data_age_days` | Age moyen des données | Indicateur global |
+| KPI | Description | Thresholds |
+|-----|-------------|------------|
+| `stale_metrics` | Metrics with no execution in > 7 days | Potentially outdated data |
+| `very_stale_metrics` | Metrics with no execution in > 30 days | Likely outdated data |
+| `avg_data_age_days` | Average data age | Overall freshness indicator |
 
 #### 6.2 Execution Stability
-| KPI | Description | Seuils |
-|-----|-------------|--------|
-| `coefficient_of_variation` | Variabilité du temps d'exécution (std/mean) | > 0.5 = instable, > 1.0 = très instable |
-| `execution_time_trend` | Tendance week-over-week | "improving", "stable", "degrading" |
-| `highly_unstable_metrics` | Nb de metrics avec CV > 1.0 | Calculs imprévisibles |
+| KPI | Description | Thresholds |
+|-----|-------------|------------|
+| `coefficient_of_variation` | Execution time variability (std/mean) | > 0.5 unstable, > 1.0 highly unstable |
+| `execution_time_trend` | Week-over-week trend | `improving`, `stable`, `degrading` |
+| `highly_unstable_metrics` | Number of metrics with CV > 1.0 | Unpredictable calculations |
 
 #### 6.3 Data Flow Health
-| KPI | Description | Interprétation |
+| KPI | Description | Interpretation |
 |-----|-------------|----------------|
-| `metrics_with_zero_rows` | Metrics qui calculent 0 lignes | Données qui ne circulent pas |
-| `upsert_ratio` | Ratio upserted/computed | Haut = beaucoup de nouvelles données |
-| `metrics_with_row_anomalies` | Metrics avec comptage incohérent | Problèmes de source |
+| `metrics_with_zero_rows` | Metrics that compute 0 rows | Data not flowing |
+| `upsert_ratio` | upserted/computed ratio | High values indicate lots of new data |
+| `metrics_with_row_anomalies` | Metrics with inconsistent row behavior | Potential source issues |
 
 #### 6.4 Scenario Coverage
-| KPI | Description | Seuils |
-|-----|-------------|--------|
-| `total_scenarios` | Nb de scénarios | Inventaire |
-| `underutilized_scenarios` | Scénarios avec < 5% des exécutions | À vérifier |
-| `scenario_imbalance_ratio` | Ratio max/min exécutions | > 10 = déséquilibre |
+| KPI | Description | Thresholds |
+|-----|-------------|------------|
+| `total_scenarios` | Number of scenarios | Inventory |
+| `underutilized_scenarios` | Scenarios with < 5% of executions | Review needed |
+| `scenario_imbalance_ratio` | Max/min execution ratio | > 10 indicates imbalance |
 
 #### 6.5 Change Velocity
-| KPI | Description | Seuils |
-|-----|-------------|--------|
-| `changes_per_day` | Nb moyen de changements/jour | > 50 = haute vélocité |
-| `change_trend` | Tendance des changements | "increasing", "stable", "decreasing" |
+| KPI | Description | Thresholds |
+|-----|-------------|------------|
+| `changes_per_day` | Average changes per day | > 50 means high change velocity |
+| `change_trend` | Change trend | `increasing`, `stable`, `decreasing` |
 
 #### 6.6 Batch Reliability
-| KPI | Description | Interprétation |
+| KPI | Description | Interpretation |
 |-----|-------------|----------------|
-| `batch_ratio` | % d'exécutions batch vs interactives | Indicateur d'automatisation |
-| `missing_batch_days` | Jours sans batch (si pattern attendu) | Process cassé |
-| `off_hours_executions_pct` | % d'exécutions hors heures | Batch nocturnes |
-
----
+| `batch_ratio` | % of batch vs interactive executions | Automation signal |
+| `missing_batch_days` | Days with missing expected batch runs | Broken process |
+| `off_hours_executions_pct` | % of off-hours executions | Typical batch behavior |
 
 ### 7. UsageAnalyzer
-**Source:** Audit Logs API
-**Question:** Quels sont les chemins critiques ?
+**Source:** Audit Logs API or Audit Logs CSV  
+**Question:** What are the critical user paths?
 
-| KPI | Description | Valeur |
-|-----|-------------|--------|
-| `top_boards` | Boards les plus consultés | Priorisation |
-| `slow_popular_boards` | Boards lents mais très utilisés | Quick wins |
-| `power_users` | Users avec > 100 actions | Stakeholders clés |
-| `recent_imports` | Imports récents | Impact sur performance |
-| `critical_paths` | Chemins à optimiser en priorité | Actions SA |
+| KPI | Description | Value |
+|-----|-------------|-------|
+| `top_boards` | Most viewed boards | Prioritization |
+| `slow_popular_boards` | Slow but frequently used boards | Quick wins |
+| `power_users` | Users with > 100 actions | Key stakeholders |
+| `recent_imports` | Recent imports | Performance impact |
+| `critical_paths` | Paths to optimize first | Actionable priorities |
 
-**Types de Critical Paths:**
-- `high_traffic_slow`: Board lent mais très utilisé
-- `import_heavy`: Application avec beaucoup d'imports
-- `power_user_bottleneck`: Power user impacté par la lenteur
-
----
+**Critical path types**
+- `high_traffic_slow`: slow board with heavy usage
+- `import_heavy`: app with significant import activity
+- `power_user_bottleneck`: heavy user blocked by slow flows
 
 ### 8. VersionAnalyzer
-**Source:** Metadata API
-**Question:** La dimension Version est-elle bien gérée ?
+**Source:** Metadata API  
+**Question:** Is version management healthy?
 
-| KPI | Description | Seuils |
-|-----|-------------|--------|
-| `total_versions` | Nb total de versions | > 30 = attention |
-| `archive_candidates` | Versions > 2 ans | À archiver |
-| `high_risk_dimensions` | Dimensions avec trop de versions | Impact performance |
-| `naming_issues` | Versions mal nommées | Maintenance difficile |
+| KPI | Description | Thresholds |
+|-----|-------------|------------|
+| `total_versions` | Total number of versions | > 30 requires attention |
+| `archive_candidates` | Versions older than 2 years | Archive candidates |
+| `high_risk_dimensions` | Dimensions with too many versions | Performance risk |
+| `naming_issues` | Poorly named versions | Maintainability issue |
+
+### 9. PermissionAnalyzer
+**Source:** Audit Logs API or Audit Logs CSV  
+**Question:** Are permissions governed correctly?
+
+| KPI | Description | Thresholds |
+|-----|-------------|------------|
+| `admin_users` | Number of admins | Review if > 5 |
+| `power_users` | Users with > 100 actions | Governance signal |
+| `inactive_users` | Users with no activity in > 30 days | Revoke candidate |
+| `permission_changes_count` | Number of permission changes | High frequency indicates instability |
+| `risks` | Identified risks | Prioritized list |
 
 ---
 
-### 9. PermissionAnalyzer
-**Source:** Audit Logs API
-**Question:** Les droits sont-ils bien gérés ?
+## Detailed KPIs
 
-| KPI | Description | Seuils |
-|-----|-------------|--------|
-| `admin_users` | Nb d'admins | > 5 = réviser |
-| `power_users` | Users avec > 100 actions | Stakeholders |
-| `inactive_users` | Users sans activité > 30j | Accès à révoquer |
-| `permission_changes_count` | Nb de changements de permissions | Haute fréquence = instabilité |
-| `risks` | Risques identifiés | Liste priorisée |
+The sections above list the core KPIs per analyzer. In practice, the HTML report explains the most important ones directly in context, especially in:
+
+- Performance
+- Scoping
+- Trust & Data Quality
+- Access Rights
 
 ---
 
@@ -271,35 +274,35 @@ L'audit répond à **3 questions fondamentales** :
 
 ### Performance Score (0-100)
 
-```
+```text
 Performance Score = Performance + Optimization + Complexity + Views
                          /25           /25           /25        /25
 ```
 
-| Score | Grade | Interprétation |
+| Score | Grade | Interpretation |
 |-------|-------|----------------|
-| 90-100 | A | Excellent - Workspace bien optimisé |
-| 75-89 | B | Bon - Quelques améliorations possibles |
-| 60-74 | C | Moyen - Optimisations nécessaires |
-| 40-59 | D | Mauvais - Actions urgentes requises |
-| 0-39 | F | Critique - Refonte nécessaire |
+| 90-100 | A | Excellent - workspace is well optimized |
+| 75-89 | B | Good - some improvements still possible |
+| 60-74 | C | Fair - optimization work is needed |
+| 40-59 | D | Poor - urgent actions required |
+| 0-39 | F | Critical - substantial redesign likely needed |
 
 ### Trust Score (0-100)
 
-```
+```text
 Trust Score = (Data Quality Score + Process Reliability Score) / 2
 ```
 
-| Score | Level | Interprétation |
+| Score | Level | Interpretation |
 |-------|-------|----------------|
-| 80-100 | HIGH | Données fiables pour décisions |
-| 60-79 | MEDIUM | Vérifier avant utilisation critique |
-| 40-59 | LOW | Problèmes de fiabilité détectés |
-| 0-39 | CRITICAL | Ne pas utiliser pour décisions |
+| 80-100 | HIGH | Data is reliable enough for decisions |
+| 60-79 | MEDIUM | Verify before critical use |
+| 40-59 | LOW | Reliability issues detected |
+| 0-39 | CRITICAL | Do not use for decision-making |
 
 ---
 
-## Utilisation
+## Usage
 
 ### Installation
 
@@ -308,20 +311,23 @@ cd pigment-agent-skills/reliability-audit
 pip install -r requirements.txt
 ```
 
-### Interface Web (recommandé)
+### Web Interface
 
 ```bash
 python -m src.main --web
-# Ouvrir http://127.0.0.1:8080
+# Open http://127.0.0.1:8080
 ```
 
-### Ligne de commande
+### Command Line
 
 ```bash
-# Minimum (CSV seul)
+# Minimal run (Executions CSV only)
 python -m src.main --executions data/Executions.csv
 
-# Complet (tous les CSVs + APIs)
+# Canonical bundled demo
+./run_demo.sh
+
+# Full run with CSVs + APIs
 python -m src.main \
   --executions data/Executions.csv \
   --views data/Views.csv \
@@ -329,7 +335,7 @@ python -m src.main \
   --metadata-key "pk_xxx" \
   --audit-key "ak_xxx"
 
-# Complet (CSV Audit Logs local)
+# Full run with local Audit Logs CSV
 python -m src.main \
   --executions data/Executions.csv \
   --views data/Views.csv \
@@ -337,89 +343,89 @@ python -m src.main \
   --audit-log-file data/Audit_Logs.csv
 ```
 
-### Options CLI
+### CLI Options
 
 | Option | Description |
 |--------|-------------|
-| `--executions PATH` | Chemin vers Executions CSV |
-| `--views PATH` | Chemin vers Views CSV |
-| `--armset PATH` | Chemin vers Armset_Upmset CSV |
-| `--metadata-key KEY` | Clé API Metadata |
-| `--audit-key KEY` | Clé API Audit Logs |
-| `--audit-log-file PATH` | Fichier Audit Logs local (JSON ou CSV) |
-| `--web` | Lancer l'interface web |
-| `--port PORT` | Port pour l'interface web (défaut: 8080) |
-| `--format FORMAT` | Format de sortie: csv, html, all |
-| `--output-dir PATH` | Dossier de sortie |
+| `--executions PATH` | Path to Executions CSV |
+| `--views PATH` | Path to Views CSV |
+| `--armset PATH` | Path to Armset_Upmset CSV |
+| `--metadata-key KEY` | Metadata API key |
+| `--audit-key KEY` | Audit Logs API key |
+| `--audit-log-file PATH` | Local Audit Logs file (JSON or CSV) |
+| `--web` | Start the web interface |
+| `--port PORT` | Web port (default: 8080) |
+| `--format FORMAT` | Output format: `csv`, `html`, or `all` |
+| `--output-dir PATH` | Output directory |
 
 ---
 
-## Interprétation des résultats
+## How to Read the Results
 
-### Matrice de priorisation
+### Prioritization Matrix
 
-```
-                    IMPACT UTILISATEUR
-                    Faible          Élevé
+```text
+                    USER IMPACT
+                    Low             High
                  ┌─────────────┬─────────────┐
-    Effort       │   IGNORER   │  QUICK WIN  │
-    Faible       │             │  Priorité 1 │
+    Low effort   │   IGNORE    │  QUICK WIN  │
+                 │             │  Priority 1 │
                  ├─────────────┼─────────────┤
-    Effort       │   BACKLOG   │  ROADMAP    │
-    Élevé        │  Priorité 3 │  Priorité 2 │
+    High effort  │   BACKLOG   │   ROADMAP   │
+                 │  Priority 3 │  Priority 2 │
                  └─────────────┴─────────────┘
 ```
 
-### Quick Wins typiques
+### Typical Quick Wins
 
-| Problème détecté | Action |
-|------------------|--------|
-| Metrics non scopées > 5s | Activer le scoping avec BY/FILTER |
-| Views lentes très utilisées | Ajouter page selectors |
-| ARM/UPM > 20% du compute | Réduire dimensions dans access rights |
-| Metrics > 10 dimensions | Convertir en Properties |
+| Detected Issue | Action |
+|----------------|--------|
+| Slow partially scoped metrics | Refine scoping with `FILTER` / `SELECT` / `BY` |
+| Slow heavily used views | Add page selectors and filters |
+| ARM/UPM > 20% of compute | Reduce dimensions in access rights logic |
+| Metrics > 10 dimensions | Replace redundant dimensions with properties |
 
-### Roadmap typique
+### Typical Roadmap Items
 
-| Problème détecté | Action |
-|------------------|--------|
-| Blocks > 10M lignes | Splitter le block |
-| Application monolithique | Découper en applications |
-| Versions > 2 ans | Archiver les anciennes versions |
-| Formules avec PREVIOUS() en chaîne | Revoir la logique |
+| Detected Issue | Action |
+|----------------|--------|
+| Blocks > 10M rows | Split the block |
+| Monolithic application | Split across applications |
+| Versions > 2 years old | Archive old versions |
+| Long PREVIOUS() chains | Redesign the calculation logic |
 
-### Signaux d'alerte critiques
+### Critical Warning Signals
 
-| Signal | Signification | Action immédiate |
-|--------|---------------|------------------|
-| 🚨 Trust Level CRITICAL | Données non fiables | Stopper l'utilisation pour décisions |
-| 🚨 Metrics > 30s | Timeout probable | Optimiser ou splitter |
-| 🚨 Batch missing > 5 days | Process cassé | Vérifier scheduler |
-| 🚨 Performance degrading | Régression | Analyser changements récents |
+| Signal | Meaning | Immediate Action |
+|--------|---------|------------------|
+| Trust Level CRITICAL | Data is not reliable | Stop using it for decisions |
+| Metrics > 30s | Timeout risk | Optimize or split |
+| Missing batch days | Broken process | Check scheduler / orchestration |
+| Performance degrading | Regression trend | Review recent changes |
 
 ---
 
-## Structure du projet
+## Project Structure
 
-```
+```text
 reliability-audit/
-├── README.md                 # Cette documentation
-├── requirements.txt          # Dépendances Python
+├── README.md                 # This documentation
+├── requirements.txt          # Python dependencies
 ├── config/
-│   ├── thresholds.yaml       # Seuils configurables
-│   └── config.example.yaml   # Configuration exemple
-├── sample-data/              # Données de test
-│   ├── Executions_anonymized_basic.csv
-│   ├── Views_Executions_anonymized_basic.csv
-│   └── Armset_Upmset_Executions_anonymized_basic.csv
+│   ├── thresholds.yaml       # Configurable thresholds
+│   └── config.example.yaml   # Example configuration
+├── examples/
+│   ├── demo/                 # Canonical dataset for UI/demo flow
+│   └── benchmark/            # Larger anonymized dataset
+├── templates/                # CSV headers for your own exports
 ├── src/
-│   ├── main.py               # Point d'entrée CLI
-│   ├── web.py                # Interface web Flask
-│   ├── config.py             # Chargement configuration
-│   ├── data_loader.py        # Chargement CSV
-│   ├── scoring.py            # Calcul des scores
-│   ├── report_generator.py   # Génération rapports
-│   ├── api_client.py         # Clients API Pigment
+│   ├── main.py               # CLI entry point
+│   ├── web.py                # Flask web interface
+│   ├── config.py             # Config loading
+│   ├── data_loader.py        # CSV loading
+│   ├── scoring.py            # Scoring logic
+│   ├── report_generator.py   # Report generation
+│   ├── api_client.py         # Pigment API clients
 │   └── analyzers/
 │       ├── performance_analyzer.py
 │       ├── scoping_analyzer.py
@@ -430,41 +436,40 @@ reliability-audit/
 │       ├── usage_analyzer.py
 │       ├── version_analyzer.py
 │       └── permission_analyzer.py
-└── output/                   # Rapports générés
+└── output/                   # Generated reports
 ```
 
 ---
 
 ## FAQ
 
-### Q: Quelle est la différence entre Performance Score et Trust Score ?
+### What is the difference between Performance Score and Trust Score?
 
-**Performance Score** mesure la rapidité et l'optimisation technique.
-**Trust Score** mesure si on peut se fier aux données pour prendre des décisions.
+**Performance Score** measures speed and technical optimization.  
+**Trust Score** measures whether the data is reliable enough for decision-making.
 
-Un workspace peut être rapide (Performance A) mais avec des données obsolètes (Trust LOW).
+A workspace can be fast (Performance A) but still untrustworthy (Trust LOW) if data is stale or processes are broken.
 
-### Q: Comment obtenir les fichiers CSV ?
+### How do I get the CSV files?
 
-Les fichiers CSV sont exportés depuis l'interface admin Pigment ou via l'API Export.
-Contactez votre administrateur Pigment pour obtenir l'accès.
+The CSV files are typically exported from Pigment admin tooling or related export flows. If you do not have access, ask your Pigment administrator.
 
-### Q: À quelle fréquence faire l'audit ?
+### How often should I run the audit?
 
-| Type d'audit | Fréquence | Déclencheur |
-|--------------|-----------|-------------|
-| Quick check | Hebdomadaire | Automatique |
-| Standard | Mensuel | Routine |
-| Complet | Trimestriel | Ou après changement majeur |
+| Audit Type | Frequency | Trigger |
+|------------|-----------|---------|
+| Quick check | Weekly | Automated monitoring |
+| Standard | Monthly | Routine health review |
+| Full | Quarterly | Or after major changes |
 
-### Q: Comment customiser les seuils ?
+### How do I customize thresholds?
 
-Modifiez `config/thresholds.yaml`:
+Edit `config/thresholds.yaml`:
 
 ```yaml
 performance:
   metric_execution:
-    watch: 3000      # Ajuster selon contexte
+    watch: 3000
     warning: 5000
     critical: 30000
 ```
