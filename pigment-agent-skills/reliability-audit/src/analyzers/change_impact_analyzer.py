@@ -26,6 +26,8 @@ class MetricActionImpact:
     matched_event_id: str
     matched_event_type: str
     matched_event_timestamp: str
+    matched_event_source_row: Optional[int] = None
+    matched_event_source_record: Optional[int] = None
     actor_email: str = ""
     actor_name: str = ""
     matched_block_id: str = ""
@@ -53,8 +55,11 @@ class ChangeImpactAnalysisResult:
     """Results of action attribution from audit logs to metric executions."""
 
     analysis_window_hours: int = 24
+    match_window_hours: int = 12
     window_start_timestamp: str = ""
     window_end_timestamp: str = ""
+    total_execution_rows: int = 0
+    excluded_nochange_executions: int = 0
 
     total_audit_events: int = 0
     change_events_considered: int = 0
@@ -65,9 +70,11 @@ class ChangeImpactAnalysisResult:
     app_fallback_matches: int = 0
     time_fallback_matches: int = 0
     unmatched_root_changes: int = 0
+    unmatched_reason_counts: Dict[str, int] = field(default_factory=dict)
 
     last_24h_root_changes: int = 0
     last_24h_matched_changes: int = 0
+    last_24h_unmatched_reason_counts: Dict[str, int] = field(default_factory=dict)
     last_24h_impacts: List[MetricActionImpact] = field(default_factory=list)
     metrics_impacted_last_24h: List[MetricImpactSummary24h] = field(default_factory=list)
 
@@ -78,6 +85,16 @@ class ChangeImpactAnalyzer:
     """Correlate audit actions with root executions (change starters)."""
 
     REQUIRED_EXEC_COLUMNS = ["metric_id", "metric_name", "application", "executionStartedAt"]
+    ALLOWED_EXECUTION_TRIGGER_EVENTS = {
+        "metricupdated",
+        "metricdatachanged",
+        "transactionlistdatachanged",
+        "dimensiondatachanged",
+        "transactionlistupdated",
+        "dimensionupdated",
+        "metricdeleted",
+        "dimensioncreated",
+    }
 
     def __init__(
         self,
@@ -89,13 +106,17 @@ class ChangeImpactAnalyzer:
     ):
         self.audit_client = audit_client
         self.analysis_window_hours = analysis_window_hours
+        self.match_window_hours = match_window_hours
         self.match_tolerance = pd.Timedelta(hours=match_window_hours)
         self.max_events = max_events
         self.max_impacts_kept = max_impacts_kept
 
     def analyze(self, executions: pd.DataFrame) -> ChangeImpactAnalysisResult:
         """Run attribution analysis from executions + audit events."""
-        result = ChangeImpactAnalysisResult(analysis_window_hours=self.analysis_window_hours)
+        result = ChangeImpactAnalysisResult(
+            analysis_window_hours=self.analysis_window_hours,
+            match_window_hours=self.match_window_hours,
+        )
 
         missing_cols = [c for c in self.REQUIRED_EXEC_COLUMNS if c not in executions.columns]
         if missing_cols:
@@ -105,7 +126,9 @@ class ChangeImpactAnalyzer:
             )
             return result
 
-        roots = self._build_root_executions(executions)
+        result.total_execution_rows = len(executions)
+        roots, excluded_nochange = self._build_root_executions(executions)
+        result.excluded_nochange_executions = excluded_nochange
         result.total_root_changes = len(roots)
         if roots.empty:
             result.insights.append("No valid root executions found for attribution.")
@@ -122,10 +145,17 @@ class ChangeImpactAnalyzer:
         if not events["parsed"]:
             result.unmatched_root_changes = result.total_root_changes
             result.last_24h_root_changes = int((roots["root_ts"] >= window_start).sum())
+            result.unmatched_reason_counts = {"no_change_events_found": result.total_root_changes}
+            if result.last_24h_root_changes > 0:
+                result.last_24h_unmatched_reason_counts = {
+                    "no_change_events_found": result.last_24h_root_changes
+                }
             result.insights.append("No matching change events found in audit logs for the selected period.")
             return result
 
         index = self._build_event_index(events["parsed"])
+        unmatched_reasons = Counter()
+        unmatched_reasons_last_24h = Counter()
 
         metric_summary = defaultdict(lambda: {
             "change_ids": set(),
@@ -137,6 +167,10 @@ class ChangeImpactAnalyzer:
 
         for row in roots.itertuples(index=False):
             root_ts = row.root_ts
+            metric_id = self._clean_text(row.metric_id)
+            metric_name = self._clean_text(row.metric_name)
+            application = self._clean_text(row.application)
+            change_key = self._clean_text(row.change_key) or str(row.change_key or "")
             is_last_24h = root_ts >= window_start
             if is_last_24h:
                 result.last_24h_root_changes += 1
@@ -149,6 +183,15 @@ class ChangeImpactAnalyzer:
             )
             if matched_event is None:
                 result.unmatched_root_changes += 1
+                reason = self._diagnose_unmatched_reason(
+                    root_ts=root_ts,
+                    metric_key=row.metric_key,
+                    app_key=row.app_key,
+                    index=index,
+                )
+                unmatched_reasons[reason] += 1
+                if is_last_24h:
+                    unmatched_reasons_last_24h[reason] += 1
                 continue
 
             result.matched_root_changes += 1
@@ -164,9 +207,9 @@ class ChangeImpactAnalyzer:
             if is_last_24h:
                 result.last_24h_matched_changes += 1
 
-                key = (str(row.metric_id or ""), str(row.metric_name or ""), str(row.application or ""))
+                key = (metric_id, metric_name, application)
                 summary = metric_summary[key]
-                summary["change_ids"].add(str(row.change_key))
+                summary["change_ids"].add(change_key)
                 summary["actions"] += 1
                 if matched_event["actor_email"]:
                     summary["actors"].add(matched_event["actor_email"])
@@ -180,14 +223,16 @@ class ChangeImpactAnalyzer:
                 if len(result.last_24h_impacts) < self.max_impacts_kept:
                     delay_seconds = max(0.0, (root_ts - matched_event["event_ts"]).total_seconds())
                     result.last_24h_impacts.append(MetricActionImpact(
-                        metric_id=str(row.metric_id or ""),
-                        metric_name=str(row.metric_name or ""),
-                        application=str(row.application or ""),
-                        change_id=str(row.change_key or ""),
+                        metric_id=metric_id,
+                        metric_name=metric_name,
+                        application=application,
+                        change_id=change_key,
                         root_execution_timestamp=root_ts.isoformat(),
                         matched_event_id=matched_event["event_id"],
                         matched_event_type=matched_event["event_type"],
                         matched_event_timestamp=matched_event["event_ts"].isoformat(),
+                        matched_event_source_row=matched_event["source_row_number"],
+                        matched_event_source_record=matched_event["source_record_index"],
                         actor_email=matched_event["actor_email"],
                         actor_name=matched_event["actor_name"],
                         matched_block_id=matched_event["block_key_raw"] or "",
@@ -217,6 +262,8 @@ class ChangeImpactAnalyzer:
         result.last_24h_impacts.sort(
             key=lambda x: x.root_execution_timestamp, reverse=True
         )
+        result.unmatched_reason_counts = dict(unmatched_reasons)
+        result.last_24h_unmatched_reason_counts = dict(unmatched_reasons_last_24h)
 
         self._add_insights(result)
         return result
@@ -230,12 +277,31 @@ class ChangeImpactAnalyzer:
             return None
         return s.lower()
 
-    def _build_root_executions(self, executions: pd.DataFrame) -> pd.DataFrame:
+    @staticmethod
+    def _clean_text(value) -> str:
+        if value is None:
+            return ""
+        s = str(value).strip()
+        if not s or s.lower() in ("nan", "none", "null"):
+            return ""
+        return s
+
+    def _build_root_executions(self, executions: pd.DataFrame) -> Tuple[pd.DataFrame, int]:
         df = executions.copy()
         df["root_ts"] = pd.to_datetime(df["executionStartedAt"], errors="coerce", utc=True)
         df = df[df["root_ts"].notna()].copy()
         if df.empty:
-            return df
+            return df, 0
+
+        excluded_nochange = 0
+        if "scoped_level" in df.columns:
+            scoped_level = df["scoped_level"].astype(str).str.strip().str.lower()
+            nochange_mask = scoped_level.eq("nochange")
+            excluded_nochange = int(nochange_mask.sum())
+            if excluded_nochange > 0:
+                df = df[~nochange_mask].copy()
+                if df.empty:
+                    return df, excluded_nochange
 
         if "changeId" in df.columns:
             change_key = df["changeId"].astype(str).str.strip()
@@ -269,7 +335,7 @@ class ChangeImpactAnalyzer:
               ]]
               .copy()
         )
-        return roots
+        return roots, excluded_nochange
 
     def _load_change_events(self, earliest_root_ts: pd.Timestamp) -> Dict[str, List[Dict]]:
         since_ts = earliest_root_ts - self.match_tolerance
@@ -286,11 +352,14 @@ class ChangeImpactAnalyzer:
 
             block_key_raw, block_key = self._extract_block_id(evt)
             app_key_raw, app_key = self._extract_app_id(evt)
+            metadata = evt.metadata or {}
 
             parsed_events.append({
                 "event_id": str(evt.event_id or ""),
                 "event_type": str(evt.event_type or ""),
                 "event_ts": event_ts,
+                "source_row_number": metadata.get("source_row_number"),
+                "source_record_index": metadata.get("source_record_index"),
                 "actor_email": str(evt.actor_email or ""),
                 "actor_name": str(evt.actor_name or ""),
                 "block_key_raw": block_key_raw,
@@ -363,27 +432,7 @@ class ChangeImpactAnalyzer:
         evt = (event_type or "").strip().lower()
         if not evt:
             return False
-
-        excluded = [
-            "view", "open", "export", "download", "login", "logout", "session",
-            "access", "read", "consult", "print",
-        ]
-        if any(token in evt for token in excluded):
-            return False
-
-        included = [
-            "create", "created",
-            "modify", "modified",
-            "update", "updated",
-            "delete", "deleted",
-            "import", "imported",
-            "input",
-            "formula", "permission", "scenario",
-            "execute", "executed",
-            "run", "publish",
-            "upload", "trigger", "recalculate", "setting", "config",
-        ]
-        return any(token in evt for token in included)
+        return evt in ChangeImpactAnalyzer.ALLOWED_EXECUTION_TRIGGER_EVENTS
 
     def _build_event_index(self, events: List[Dict]) -> Dict[str, Dict]:
         def add_to_index(index_map: Dict, key, event):
@@ -423,6 +472,16 @@ class ChangeImpactAnalyzer:
             return None
         return event
 
+    def _entry_state(self, entry: Optional[Dict], root_ts: pd.Timestamp) -> Tuple[bool, bool]:
+        """Return (has_prior_event, has_prior_event_within_tolerance)."""
+        if not entry or not entry["ts"]:
+            return False, False
+        pos = bisect_right(entry["ts"], root_ts) - 1
+        if pos < 0:
+            return False, False
+        event = entry["events"][pos]
+        return True, (root_ts - event["event_ts"] <= self.match_tolerance)
+
     def _match_event(
         self,
         root_ts: pd.Timestamp,
@@ -451,6 +510,47 @@ class ChangeImpactAnalyzer:
 
         return None, ""
 
+    def _diagnose_unmatched_reason(
+        self,
+        root_ts: pd.Timestamp,
+        metric_key: Optional[str],
+        app_key: Optional[str],
+        index: Dict[str, Dict],
+    ) -> str:
+        """Best-effort reason for unmatched root changes."""
+        global_has_prior, global_in_window = self._entry_state(index["global"], root_ts)
+        if not global_has_prior:
+            return "no_prior_change_event"
+        if not global_in_window:
+            return "outside_match_window"
+
+        # Given we allow time fallback, reaching this point is uncommon.
+        # Keep additional diagnostics for transparency.
+        if metric_key:
+            metric_has_prior, metric_in_window = self._entry_state(index["by_block"].get(metric_key), root_ts)
+            if not metric_has_prior:
+                return "metric_id_not_found_in_audit_logs"
+            if not metric_in_window:
+                return "metric_match_outside_window"
+
+        if app_key:
+            app_has_prior, app_in_window = self._entry_state(index["by_app"].get(app_key), root_ts)
+            if not app_has_prior:
+                return "application_not_found_in_audit_logs"
+            if not app_in_window:
+                return "application_match_outside_window"
+
+        if metric_key and app_key:
+            pair_has_prior, pair_in_window = self._entry_state(
+                index["by_block_app"].get((metric_key, app_key)), root_ts
+            )
+            if not pair_has_prior:
+                return "application_mismatch_for_metric"
+            if not pair_in_window:
+                return "metric_app_match_outside_window"
+
+        return "no_match_in_priority_rules"
+
     @staticmethod
     def _pct(part: int, total: int) -> float:
         if total <= 0:
@@ -470,6 +570,11 @@ class ChangeImpactAnalyzer:
             result.insights.append(
                 f"Last {result.analysis_window_hours}h window: {result.last_24h_matched_changes}/"
                 f"{result.last_24h_root_changes} root changes matched."
+            )
+        if result.unmatched_reason_counts:
+            top_reason, top_count = max(result.unmatched_reason_counts.items(), key=lambda x: x[1])
+            result.insights.append(
+                f"Top unmatched reason: {top_reason} ({top_count} root changes)."
             )
         if result.metrics_impacted_last_24h:
             top = result.metrics_impacted_last_24h[0]

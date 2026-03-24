@@ -448,6 +448,10 @@ class AuditLogsFileClient(AuditLogsAPIClient):
         actor = raw.get("actor") or {}
         target = raw.get("target") or {}
 
+        metadata = dict(raw.get("metadata") or {})
+        metadata.setdefault("source_record_index", idx + 1)
+        metadata.setdefault("source_row_number", idx + 1)
+
         return AuditEvent(
             event_id=pick("event_id", "eventId", default=f"demo-{idx}"),
             event_type=pick("event_type", "eventType", default=""),
@@ -465,7 +469,7 @@ class AuditLogsFileClient(AuditLogsAPIClient):
                 default=target.get("applicationName")
             ),
             target_block_id=pick("target_block_id", "targetBlockId", default=target.get("blockId")),
-            metadata=raw.get("metadata") or {},
+            metadata=metadata,
         )
 
     def _parse_csv_event(self, raw: Dict[str, Any], idx: int) -> AuditEvent:
@@ -496,6 +500,9 @@ class AuditLogsFileClient(AuditLogsAPIClient):
             "entityType": pick("entity_type"),
             "entityId": pick("entity_id"),
             "entityName": pick("entity_name"),
+            # For exact traceability in UI: CSV record number and physical row number (header is row 1).
+            "source_record_index": idx + 1,
+            "source_row_number": idx + 2,
         }
         if payload is not None:
             metadata["payload"] = payload

@@ -751,6 +751,22 @@ ATTRIBUTION_TEMPLATE = """
         .upload small { color: #64748b; }
 
         .row { display: flex; gap: 0.6rem; margin-top: 0.85rem; flex-wrap: wrap; }
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            min-width: 180px;
+        }
+        .field label { font-size: 0.78rem; color: #475569; font-weight: 700; }
+        .field select {
+            border: 1px solid #cbd5e1;
+            border-radius: 0.5rem;
+            padding: 0.45rem 0.55rem;
+            background: white;
+            color: #111827;
+            font-size: 0.84rem;
+        }
+        .field select:focus { outline: none; border-color: #2563eb; }
         .btn {
             border: none;
             border-radius: 0.6rem;
@@ -801,6 +817,7 @@ ATTRIBUTION_TEMPLATE = """
 
         .insights { margin-bottom: 0.8rem; }
         .insight { font-size: 0.85rem; color: #334155; padding: 0.2rem 0; }
+        .warn { font-size: 0.82rem; color: #b45309; padding: 0.2rem 0; }
 
         table {
             width: 100%;
@@ -818,6 +835,25 @@ ATTRIBUTION_TEMPLATE = """
         }
         .section-title { font-size: 0.95rem; font-weight: 800; color: #111827; margin-bottom: 0.2rem; }
         .section-sub { font-size: 0.78rem; color: #64748b; margin-bottom: 0.35rem; }
+        .table-tools {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .table-tools label { font-size: 0.78rem; color: #475569; font-weight: 700; }
+        .table-tools select {
+            min-width: 280px;
+            max-width: 100%;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.5rem;
+            padding: 0.45rem 0.55rem;
+            background: white;
+            color: #111827;
+            font-size: 0.82rem;
+        }
+        .table-tools select:focus { outline: none; border-color: #2563eb; }
     </style>
 </head>
 <body>
@@ -842,11 +878,30 @@ ATTRIBUTION_TEMPLATE = """
             </div>
 
             <div class="row">
+                <div class="field">
+                    <label>Analysis Window</label>
+                    <select id="analysis-window">
+                        <option value="24">Last 24h (Recommended)</option>
+                        <option value="168">Last 7d</option>
+                        <option value="720">Last 30d</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label>Match Window</label>
+                    <select id="match-window">
+                        <option value="12">12h before execution (Recommended)</option>
+                        <option value="24">24h before execution</option>
+                        <option value="48">48h before execution</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="row">
                 <button class="btn btn-primary" id="run-btn" onclick="runImpact(false)">Run Attribution</button>
                 <button class="btn btn-secondary" id="demo-btn" onclick="runImpact(true)">Run Demo Attribution</button>
             </div>
 
-            <div class="hint">Matching priority: metric_id + application, then metric_id, then application/time fallback.</div>
+            <div class="hint">Matching priority: metric_id + application, then metric_id, then application/time fallback. Use Debug below to understand empty windows.</div>
             <div class="error" id="error-box"></div>
         </div>
 
@@ -855,13 +910,40 @@ ATTRIBUTION_TEMPLATE = """
                 <div class="stat"><div class="v" id="s-root">0</div><div class="l">Root Changes</div></div>
                 <div class="stat"><div class="v" id="s-matched">0%</div><div class="l">Matched</div></div>
                 <div class="stat"><div class="v" id="s-exact">0%</div><div class="l">Exact Block-ID</div></div>
-                <div class="stat"><div class="v" id="s-last24">0</div><div class="l">Matched Last 24h</div></div>
+                <div class="stat"><div class="v" id="s-last24">0</div><div class="l" id="s-window-label">Matched in Window</div></div>
             </div>
 
             <div class="insights" id="insights"></div>
 
-            <div class="section-title">Top impacted metrics (last 24h)</div>
-            <div class="section-sub">Grouped view by metric.</div>
+            <div class="section-title">Debug</div>
+            <div class="section-sub">Window and matching diagnostics.</div>
+            <div class="tbl-wrap">
+                <table>
+                    <tbody id="debug-body"></tbody>
+                </table>
+            </div>
+
+            <div style="height:0.7rem"></div>
+
+            <div class="section-title">Unmatched reasons</div>
+            <div class="section-sub">Why some root changes were not matched.</div>
+            <div class="tbl-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Reason</th>
+                            <th>Count (all roots)</th>
+                            <th>Count (selected window)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reasons-body"></tbody>
+                </table>
+            </div>
+
+            <div style="height:0.7rem"></div>
+
+            <div class="section-title" id="metrics-window-title">Top impacted metrics (selected window)</div>
+            <div class="section-sub" id="metrics-window-sub">Grouped view by metric in selected window.</div>
             <div class="tbl-wrap">
                 <table>
                     <thead>
@@ -880,14 +962,23 @@ ATTRIBUTION_TEMPLATE = """
 
             <div style="height:0.7rem"></div>
 
-            <div class="section-title">Matched action details (last 24h)</div>
-            <div class="section-sub">Per impacted root change.</div>
+            <div class="section-title" id="impacts-window-title">Matched action details (selected window)</div>
+            <div class="section-sub" id="impacts-window-sub">Per impacted root change in selected window.</div>
+            <div class="table-tools">
+                <label for="metric-detail-filter">Metric filter</label>
+                <select id="metric-detail-filter">
+                    <option value="__none__">Select one metric...</option>
+                </select>
+                <span id="metric-filter-help" style="font-size:0.78rem;color:#64748b;"></span>
+            </div>
             <div class="tbl-wrap">
                 <table>
                     <thead>
                         <tr>
                             <th>Metric</th>
                             <th>Change ID</th>
+                            <th>Matched Event ID</th>
+                            <th>Audit Row</th>
                             <th>Action</th>
                             <th>Actor</th>
                             <th>Match type</th>
@@ -902,12 +993,179 @@ ATTRIBUTION_TEMPLATE = """
     </div>
 
     <script>
+        let _lastImpactResult = null;
+        let _metricFilterEntriesByKey = new Map();
+
         function esc(value) {
             if (value === null || value === undefined) return '';
             return String(value)
                 .replaceAll('&', '&amp;')
                 .replaceAll('<', '&lt;')
                 .replaceAll('>', '&gt;');
+        }
+
+        function cleanMetricValue(value) {
+            if (value === null || value === undefined) return '';
+            const s = String(value).trim();
+            if (!s) return '';
+            const low = s.toLowerCase();
+            if (low === 'nan' || low === 'none' || low === 'null') return '';
+            return s;
+        }
+
+        function metricSelectKey(item) {
+            const id = cleanMetricValue(item.metric_id);
+            const name = cleanMetricValue(item.metric_name);
+            const app = cleanMetricValue(item.application);
+            if (id) return `id:${id}`;
+            if (name && app) return `name_app:${name}|||${app}`;
+            if (name) return `name:${name}`;
+            if (app) return `unknown_app:${app}`;
+            return 'unknown:global';
+        }
+
+        function metricLabel(metricId, metricName, application = '') {
+            const name = cleanMetricValue(metricName);
+            const id = cleanMetricValue(metricId);
+            const app = cleanMetricValue(application);
+            if (name && id && name !== id) return `${name} (${id})`;
+            if (name) return name;
+            if (id) return id;
+            if (app) return `Unknown metric (${app})`;
+            return 'Unknown metric';
+        }
+
+        function buildMetricOptions(r) {
+            const options = new Map();
+            const addEntry = (metricId, metricName, application, source, summaryCount = 0) => {
+                const cleanId = cleanMetricValue(metricId);
+                const cleanName = cleanMetricValue(metricName);
+                const key = metricSelectKey({
+                    metric_id: cleanId,
+                    metric_name: cleanName,
+                    application: application,
+                });
+                const existing = options.get(key) || {
+                    key,
+                    label: metricLabel(cleanId, cleanName, application),
+                    metric_id: cleanId,
+                    metric_name: cleanName,
+                    application: cleanMetricValue(application),
+                    summary_count: 0,
+                    detail_count: 0,
+                };
+                if (source === 'summary') existing.summary_count += Number(summaryCount || 0);
+                if (source === 'detail') existing.detail_count += 1;
+                options.set(key, existing);
+            };
+
+            (r.metrics_impacted_last_24h || []).forEach(item => {
+                addEntry(
+                    item.metric_id,
+                    item.metric_name,
+                    item.application,
+                    'summary',
+                    item.impacted_changes
+                );
+            });
+            (r.last_24h_impacts || []).forEach(item => {
+                addEntry(item.metric_id, item.metric_name, item.application, 'detail');
+            });
+            return Array.from(options.values());
+        }
+
+        function populateMetricFilter(r) {
+            const sel = document.getElementById('metric-detail-filter');
+            const help = document.getElementById('metric-filter-help');
+            const entries = buildMetricOptions(r).sort((a, b) => a.label.localeCompare(b.label));
+            _metricFilterEntriesByKey = new Map();
+            sel.innerHTML = '';
+            if (!entries.length) {
+                const empty = document.createElement('option');
+                empty.value = '__none__';
+                empty.textContent = 'No metric available';
+                sel.appendChild(empty);
+                sel.value = '__none__';
+                sel.disabled = true;
+
+                const hasImpacts = (r.last_24h_impacts || []).length > 0;
+                help.textContent = hasImpacts
+                    ? 'Matched impacts exist but metric_id/metric_name are missing in executions data.'
+                    : 'No metric available in this window. Check Debug and Unmatched reasons.';
+                return;
+            }
+
+            const placeholder = document.createElement('option');
+            placeholder.value = '__none__';
+            placeholder.textContent = 'Select one metric...';
+            sel.appendChild(placeholder);
+            entries.forEach((entry) => {
+                _metricFilterEntriesByKey.set(entry.key, entry);
+                const opt = document.createElement('option');
+                opt.value = entry.key;
+                opt.textContent = entry.label;
+                sel.appendChild(opt);
+            });
+
+            sel.value = '__none__';
+            sel.disabled = false;
+            const withDetails = entries.filter(e => e.detail_count > 0).length;
+            help.textContent = withDetails > 0
+                ? `Select one metric to load exact matched root-change details (${withDetails} metrics with details).`
+                : 'Metrics are available, but no row-level details are currently loaded in the details table.';
+        }
+
+        function metricMatchesSelection(item, entry) {
+            if (!entry) return false;
+            const itemId = cleanMetricValue(item.metric_id);
+            const itemName = cleanMetricValue(item.metric_name);
+            const itemApp = cleanMetricValue(item.application);
+            if (entry.metric_id && itemId && entry.metric_id === itemId) {
+                return true;
+            }
+            if (entry.metric_name && itemName && entry.metric_name === itemName) {
+                if (!entry.application || !itemApp || entry.application === itemApp) {
+                    return true;
+                }
+            }
+            return metricSelectKey(item) === entry.key;
+        }
+
+        function renderImpactsTable(r) {
+            const windowHours = r.summary.analysis_window_hours || 24;
+            const selected = document.getElementById('metric-detail-filter').value || '__none__';
+            const selectedEntry = _metricFilterEntriesByKey.get(selected);
+            const iBody = document.getElementById('impacts-body');
+            iBody.innerHTML = '';
+
+            if (selected === '__none__') {
+                iBody.innerHTML = '<tr><td colspan="9" style="color:#64748b">Select one metric to display root-change details.</td></tr>';
+                return;
+            }
+
+            const impacts = (r.last_24h_impacts || []).filter(item => metricMatchesSelection(item, selectedEntry));
+
+            if (!impacts.length) {
+                iBody.innerHTML = `<tr><td colspan="9" style="color:#64748b">No matched impacts for the selected metric in this ${windowHours}h window.</td></tr>`;
+                return;
+            }
+
+            impacts.forEach(item => {
+                const auditRow = item.matched_event_source_row || item.matched_event_source_record || '';
+                const metricText = metricLabel(item.metric_id, item.metric_name, item.application);
+                iBody.innerHTML += `
+                    <tr>
+                        <td>${esc(metricText)}</td>
+                        <td>${esc(item.change_id)}</td>
+                        <td>${esc(item.matched_event_id)}</td>
+                        <td>${esc(auditRow)}</td>
+                        <td>${esc(item.matched_event_type)}</td>
+                        <td>${esc(item.actor_email || item.actor_name)}</td>
+                        <td>${esc(item.match_type)}</td>
+                        <td>${esc(item.seconds_from_action_to_execution)}s</td>
+                        <td>${esc(item.matched_event_timestamp)}</td>
+                    </tr>`;
+            });
         }
 
         function showError(msg) {
@@ -930,9 +1188,15 @@ ATTRIBUTION_TEMPLATE = """
             clearError();
 
             try {
+                const analysisWindow = document.getElementById('analysis-window').value;
+                const matchWindow = document.getElementById('match-window').value;
+                const formData = new FormData();
+                formData.append('analysis_window_hours', analysisWindow);
+                formData.append('match_window_hours', matchWindow);
+
                 let response;
                 if (useDemo) {
-                    response = await fetch('/api/action-impact-demo', { method: 'POST' });
+                    response = await fetch('/api/action-impact-demo', { method: 'POST', body: formData });
                 } else {
                     const execFile = document.getElementById('executions-file').files[0];
                     const auditFile = document.getElementById('audit-file').files[0];
@@ -940,7 +1204,6 @@ ATTRIBUTION_TEMPLATE = """
                         showError('Please upload both files: Executions CSV and Audit Logs CSV/JSON.');
                         return;
                     }
-                    const formData = new FormData();
                     formData.append('executions', execFile);
                     formData.append('audit_logs', auditFile);
                     response = await fetch('/api/action-impact', { method: 'POST', body: formData });
@@ -961,7 +1224,15 @@ ATTRIBUTION_TEMPLATE = """
         }
 
         function render(r) {
+            _lastImpactResult = r;
             document.getElementById('results').style.display = 'block';
+
+            const windowHours = r.summary.analysis_window_hours || 24;
+            document.getElementById('s-window-label').textContent = `Matched in ${windowHours}h`;
+            document.getElementById('metrics-window-title').textContent = `Top impacted metrics (${windowHours}h)`;
+            document.getElementById('metrics-window-sub').textContent = `Grouped view by metric in selected ${windowHours}h window.`;
+            document.getElementById('impacts-window-title').textContent = `Matched action details (${windowHours}h)`;
+            document.getElementById('impacts-window-sub').textContent = `Per impacted root change in selected ${windowHours}h window.`;
 
             const matchRate = r.summary.total_root_changes > 0
                 ? (100 * r.summary.matched_root_changes / r.summary.total_root_changes)
@@ -981,16 +1252,56 @@ ATTRIBUTION_TEMPLATE = """
             (r.insights || []).forEach(line => {
                 insights.innerHTML += `<div class="insight">• ${esc(line)}</div>`;
             });
+            (r.warnings || []).forEach(line => {
+                insights.innerHTML += `<div class="warn">⚠ ${esc(line)}</div>`;
+            });
+
+            const debugRows = [
+                ['Analysis window', `${windowHours}h`],
+                ['Match window', `${esc(r.summary.match_window_hours || '')}h`],
+                ['Window start', esc(r.summary.window_start_timestamp || '-')],
+                ['Window end', esc(r.summary.window_end_timestamp || '-')],
+                ['Execution rows loaded', esc(r.summary.total_execution_rows || 0)],
+                ['NoChange executions excluded', esc(r.summary.excluded_nochange_executions || 0)],
+                ['Total audit events loaded', esc(r.summary.total_audit_events || 0)],
+                ['Change events considered', esc(r.summary.change_events_considered || 0)],
+                ['Root changes in selected window', esc(r.summary.last_24h_root_changes || 0)],
+                ['Matched in selected window', esc(r.summary.last_24h_matched_changes || 0)],
+            ];
+            const dBody = document.getElementById('debug-body');
+            dBody.innerHTML = '';
+            debugRows.forEach(([k, v]) => {
+                dBody.innerHTML += `<tr><th style="width:300px">${k}</th><td>${v}</td></tr>`;
+            });
+
+            const reasonsAll = r.summary.unmatched_reason_counts || {};
+            const reasonsWin = r.summary.last_24h_unmatched_reason_counts || {};
+            const reasonKeys = Array.from(new Set([...Object.keys(reasonsAll), ...Object.keys(reasonsWin)]));
+            const reasonBody = document.getElementById('reasons-body');
+            reasonBody.innerHTML = '';
+            if (!reasonKeys.length) {
+                reasonBody.innerHTML = '<tr><td colspan="3" style="color:#64748b">No unmatched reasons recorded (all roots matched).</td></tr>';
+            } else {
+                reasonKeys.sort().forEach(key => {
+                    reasonBody.innerHTML += `
+                        <tr>
+                            <td>${esc(key)}</td>
+                            <td>${esc(reasonsAll[key] || 0)}</td>
+                            <td>${esc(reasonsWin[key] || 0)}</td>
+                        </tr>`;
+                });
+            }
 
             const mBody = document.getElementById('metrics-body');
             mBody.innerHTML = '';
             if (!r.metrics_impacted_last_24h.length) {
-                mBody.innerHTML = '<tr><td colspan="6" style="color:#64748b">No impacted metrics matched in the last 24h window.</td></tr>';
+                mBody.innerHTML = `<tr><td colspan="6" style="color:#64748b">No impacted metrics matched in the selected ${windowHours}h window.</td></tr>`;
             } else {
                 r.metrics_impacted_last_24h.forEach(item => {
+                    const metricText = metricLabel(item.metric_id, item.metric_name, item.application);
                     mBody.innerHTML += `
                         <tr>
-                            <td>${esc(item.metric_name || item.metric_id)}</td>
+                            <td>${esc(metricText)}</td>
                             <td>${esc(item.application)}</td>
                             <td>${esc(item.impacted_changes)}</td>
                             <td>${esc(item.matched_actions)}</td>
@@ -1000,25 +1311,17 @@ ATTRIBUTION_TEMPLATE = """
                 });
             }
 
-            const iBody = document.getElementById('impacts-body');
-            iBody.innerHTML = '';
-            if (!r.last_24h_impacts.length) {
-                iBody.innerHTML = '<tr><td colspan="7" style="color:#64748b">No matched impacts in this window.</td></tr>';
-            } else {
-                r.last_24h_impacts.forEach(item => {
-                    iBody.innerHTML += `
-                        <tr>
-                            <td>${esc(item.metric_name || item.metric_id)}</td>
-                            <td>${esc(item.change_id)}</td>
-                            <td>${esc(item.matched_event_type)}</td>
-                            <td>${esc(item.actor_email || item.actor_name)}</td>
-                            <td>${esc(item.match_type)}</td>
-                            <td>${esc(item.seconds_from_action_to_execution)}s</td>
-                            <td>${esc(item.matched_event_timestamp)}</td>
-                        </tr>`;
-                });
-            }
+            populateMetricFilter(r);
+            renderImpactsTable(r);
         }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('metric-detail-filter').addEventListener('change', () => {
+                if (_lastImpactResult) {
+                    renderImpactsTable(_lastImpactResult);
+                }
+            });
+        });
     </script>
 </body>
 </html>
@@ -1084,10 +1387,24 @@ def _validate_attribution_columns(executions_df: pd.DataFrame) -> tuple:
     return None, warnings
 
 
-def _run_change_impact_from_paths(executions_path, audit_logs_path):
+def _parse_positive_int(raw_value, default_value: int, min_value: int, max_value: int) -> int:
+    """Parse and clamp integer options from request parameters."""
+    try:
+        parsed = int(raw_value)
+    except (TypeError, ValueError):
+        return default_value
+    return max(min_value, min(max_value, parsed))
+
+
+def _run_change_impact_from_paths(
+    executions_path,
+    audit_logs_path,
+    analysis_window_hours: int = 24,
+    match_window_hours: int = 12,
+):
     """Run only action attribution for the focused UI. Returns (result_dict, error_str)."""
     try:
-        executions_df = pd.read_csv(executions_path)
+        executions_df = pd.read_csv(executions_path, low_memory=False)
     except Exception as e:
         return None, f"Could not read executions CSV: {e}"
 
@@ -1097,7 +1414,11 @@ def _run_change_impact_from_paths(executions_path, audit_logs_path):
 
     try:
         audit_client = AuditLogsFileClient(str(audit_logs_path))
-        analyzer = ChangeImpactAnalyzer(audit_client)
+        analyzer = ChangeImpactAnalyzer(
+            audit_client,
+            analysis_window_hours=analysis_window_hours,
+            match_window_hours=match_window_hours,
+        )
         result = analyzer.analyze(executions_df)
     except Exception as e:
         return None, f"Could not run action attribution: {e}"
@@ -1105,8 +1426,11 @@ def _run_change_impact_from_paths(executions_path, audit_logs_path):
     payload = {
         "summary": {
             "analysis_window_hours": result.analysis_window_hours,
+            "match_window_hours": result.match_window_hours,
             "window_start_timestamp": result.window_start_timestamp,
             "window_end_timestamp": result.window_end_timestamp,
+            "total_execution_rows": result.total_execution_rows,
+            "excluded_nochange_executions": result.excluded_nochange_executions,
             "total_audit_events": result.total_audit_events,
             "change_events_considered": result.change_events_considered,
             "total_root_changes": result.total_root_changes,
@@ -1116,13 +1440,15 @@ def _run_change_impact_from_paths(executions_path, audit_logs_path):
             "app_fallback_matches": result.app_fallback_matches,
             "time_fallback_matches": result.time_fallback_matches,
             "unmatched_root_changes": result.unmatched_root_changes,
+            "unmatched_reason_counts": result.unmatched_reason_counts,
             "last_24h_root_changes": result.last_24h_root_changes,
             "last_24h_matched_changes": result.last_24h_matched_changes,
+            "last_24h_unmatched_reason_counts": result.last_24h_unmatched_reason_counts,
         },
         "warnings": warnings,
         "insights": result.insights,
         "metrics_impacted_last_24h": [asdict(m) for m in result.metrics_impacted_last_24h[:100]],
-        "last_24h_impacts": [asdict(i) for i in result.last_24h_impacts[:400]],
+        "last_24h_impacts": [asdict(i) for i in result.last_24h_impacts[:5000]],
     }
     return payload, None
 
@@ -1226,6 +1552,12 @@ def run_action_impact():
 
     executions_file = request.files['executions']
     audit_logs_file = request.files['audit_logs']
+    analysis_window_hours = _parse_positive_int(
+        request.form.get('analysis_window_hours'), default_value=24, min_value=1, max_value=24 * 90
+    )
+    match_window_hours = _parse_positive_int(
+        request.form.get('match_window_hours'), default_value=12, min_value=1, max_value=24 * 30
+    )
 
     temp_dir = tempfile.mkdtemp()
     try:
@@ -1236,7 +1568,12 @@ def run_action_impact():
         executions_file.save(executions_path)
         audit_logs_file.save(audit_logs_path)
 
-        result, err = _run_change_impact_from_paths(executions_path, audit_logs_path)
+        result, err = _run_change_impact_from_paths(
+            executions_path,
+            audit_logs_path,
+            analysis_window_hours=analysis_window_hours,
+            match_window_hours=match_window_hours,
+        )
         if err:
             return jsonify({'error': err}), 400
         return jsonify(result)
@@ -1262,7 +1599,19 @@ def run_action_impact_demo():
     if not audit_path.exists():
         return jsonify({'error': 'Demo audit logs file not found.'}), 404
 
-    result, err = _run_change_impact_from_paths(exec_path, audit_path)
+    analysis_window_hours = _parse_positive_int(
+        request.form.get('analysis_window_hours'), default_value=24, min_value=1, max_value=24 * 90
+    )
+    match_window_hours = _parse_positive_int(
+        request.form.get('match_window_hours'), default_value=12, min_value=1, max_value=24 * 30
+    )
+
+    result, err = _run_change_impact_from_paths(
+        exec_path,
+        audit_path,
+        analysis_window_hours=analysis_window_hours,
+        match_window_hours=match_window_hours,
+    )
     if err:
         return jsonify({'error': err}), 400
     return jsonify(result)
