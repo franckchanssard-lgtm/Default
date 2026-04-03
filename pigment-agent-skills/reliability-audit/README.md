@@ -12,9 +12,10 @@ Automated audit tool for assessing the **reliability** of a Pigment workspace.
 2. [Required Inputs](#required-inputs)
 3. [The 9 Analyzers](#the-9-analyzers)
 4. [Detailed KPIs](#detailed-kpis)
-5. [Scoring](#scoring)
-6. [Usage](#usage)
-7. [How to Read the Results](#how-to-read-the-results)
+5. [KPI Definitions and Calculation Method](#kpi-definitions-and-calculation-method)
+6. [Scoring](#scoring)
+7. [Usage](#usage)
+8. [How to Read the Results](#how-to-read-the-results)
 
 ---
 
@@ -267,6 +268,284 @@ The sections above list the core KPIs per analyzer. In practice, the HTML report
 - Scoping
 - Trust & Data Quality
 - Access Rights
+
+## KPI Definitions and Calculation Method
+
+This section documents what each indicator is meant to capture, why it exists, and how it is calculated in the audit engine.
+
+Important interpretation rules:
+
+- A **KPI** can be a numeric measure, a count, a ratio, or a prioritized list.
+- Some outputs are **raw measurements** computed directly from source files or APIs.
+- Some outputs are **derived heuristics** used to turn raw measurements into a score or risk signal.
+- Scores are intentionally rule-based. They are not machine-learning predictions or statistical confidence intervals.
+
+### 1. PerformanceAnalyzer
+
+This analyzer answers: **"How slow are calculations, and how bad is the tail?"**
+
+| Indicator | Why it matters | Calculation method |
+|-----------|----------------|--------------------|
+| `avg_execution_time_ms` | Gives a baseline view of general calculation speed. | Mean of the `execution_time` column in `Executions.csv`. |
+| `p50_execution_time_ms`, `p75_execution_time_ms`, `p95_execution_time_ms`, `p99_execution_time_ms` | Shows the distribution, not just the average. `p75` is the main scoring signal because it captures repeated slowness without overreacting to a single outlier. | Quantiles of the `execution_time` column. |
+| `critical_count`, `warning_count`, `watch_count` | Counts the number of persistently slow objects that should be prioritized. | Metrics and views are grouped, their average execution time is computed, then each object is bucketed against configured thresholds. |
+| `slow_metrics` | Prioritized optimization list for formula performance. | Group `Executions.csv` by `application`, `metric_id`, `metric_name`, then compute average, max, count, and total execution time per metric. |
+| `slow_views` | Prioritized optimization list for UX performance. | Group `Views_Executions.csv` by `app_id`, `blockId`, `blockName`, then compute average, max, count, and total render time per view. |
+
+Performance score logic:
+
+- Start from the `p75_execution_time_ms` band:
+  - `< 1000 ms` -> 100% of the analyzer score
+  - `< 2000 ms` -> 90%
+  - `< 3000 ms` -> 80%
+  - `< 5000 ms` -> 60%
+  - `< 10000 ms` -> 40%
+  - `>= 10000 ms` -> 20%
+- Apply an additional penalty for critical objects:
+  - `critical penalty = min(critical_count * 2, max_score * 0.6)`
+
+### 2. ScopingAnalyzer
+
+This analyzer answers: **"Are formulas recalculating more cells than necessary?"**
+
+| Indicator | Why it matters | Calculation method |
+|-----------|----------------|--------------------|
+| `fully_scoped_count` | Counts formulas recalculating only impacted cells. | Count of execution rows where `jobType == "Formula"` and `scoped_level == "FullyScoped"`. |
+| `partially_scoped_count` | Counts formulas that are better than unscoped but still too broad. | Count of formula execution rows where `scoped_level == "PartiallyScoped"`. |
+| `no_change_count` | Identifies recalculations that produced no output change. | Count of formula execution rows where `scoped_level == "NoChange"`. |
+| `fully_scoped_pct`, `partially_scoped_pct` | Measures the share of scoped formulas among formulas where scoping actually applies. | Percentages computed on `fully_scoped_count + partially_scoped_count`. `NoChange` and `NonApplicable` are excluded from this denominator. |
+| `no_change_pct` | Helps identify potentially noisy or redundant recalculation patterns. | `no_change_count / total_formula_executions * 100`. |
+| `partially_scoped_total_time_ms` | Shows how much total compute is spent in formulas that still need scoping work. | Sum of `execution_time` where `jobType == "Formula"` and `scoped_level == "PartiallyScoped"`. |
+| `partially_scoped_time_pct` | Main optimization KPI because it measures the compute share tied to imperfect scoping. | `partially_scoped_total_time_ms / total_formula_time_ms * 100`. |
+| `potential_savings_ms` | Gives a rough business case for scoping improvements. | Estimated as `partially_scoped_total_time_ms * 0.25`. This is a heuristic, not an observed saving. |
+| `optimization_candidates` | Prioritized list of formulas likely worth fixing first. | Partially scoped metrics are grouped and sorted by total time, with emphasis on average time greater than 3000 ms. |
+
+Scoping score logic:
+
+- Main signal is `partially_scoped_time_pct`:
+  - `<= 10%` -> 100%
+  - `<= 25%` -> 85%
+  - `<= 50%` -> 65%
+  - `<= 75%` -> 45%
+  - `> 75%` -> 25%
+- Secondary cross-check:
+  - `scoped_pct = fully_scoped_pct + (partially_scoped_pct * 0.5)`
+  - if `scoped_pct < 30` and `partially_scoped_time_pct < 25`, the score is multiplied by `0.9`
+
+### 3. ComplexityAnalyzer
+
+This analyzer answers: **"Is structural model complexity driving performance risk?"**
+
+| Indicator | Why it matters | Calculation method |
+|-----------|----------------|--------------------|
+| `avg_dimensions` | Higher dimension counts usually increase recalculation breadth and maintenance cost. | Metrics are deduplicated first, then the mean of their `nb_dims` value is computed. |
+| `max_dimensions` | Highlights the worst structural outlier. | Maximum `nb_dims` across deduplicated metrics. |
+| `dims_distribution` | Shows whether high complexity is isolated or systemic. | Frequency distribution of deduplicated metric dimension counts. |
+| `dims_time_correlation` | Tests whether dimension count is materially associated with slowness. | Correlation between metric dimension count and average execution time, when enough data points exist. |
+| `dims_rows_correlation` | Tests whether dimension count is associated with row explosion. | Correlation between metric dimension count and average computed rows. |
+| `critical_count`, `warning_count`, `watch_count` | Converts model complexity into a prioritized risk inventory. | Deduplicated metrics are compared with configured dimension thresholds and counted by severity. |
+| `high_complexity_metrics` | Gives the concrete list of objects behind the aggregate counts. | Metrics with dimension counts above watch, warning, or critical thresholds, sorted by severity and impact. |
+
+Complexity score logic:
+
+- The analyzer combines three components:
+  - structural complexity share: 50%
+  - dimension-to-time correlation: 30%
+  - average dimensions level: 20%
+- This means a model is penalized more when it is both structurally complex and empirically slow because of that complexity.
+
+### 4. WorkloadAnalyzer
+
+This analyzer answers: **"Where is interactive load concentrated, and how much of it is slow?"**
+
+| Indicator | Why it matters | Calculation method |
+|-----------|----------------|--------------------|
+| `slow_views_pct` | Measures how much of the UI experience is perceptibly slow. | Percentage of view execution rows where `execution_time` is above the configured warning threshold for view rendering. |
+| `top_app_pct` | Detects concentration risk, where one application absorbs most user-facing compute. | Group view executions by application, sum execution time per app, then compute the share of the heaviest app over total view time. |
+| `apps_by_workload` | Identifies where to optimize first at the application level. | Per app: sum, mean, count, distinct metrics, and `pct_of_total_time`. |
+| `hourly_distribution`, `peak_hour` | Helps detect hotspots caused by user concurrency or scheduling patterns. | Count executions by hour of day, then pick the hour with the highest frequency. |
+| `daily_distribution`, `peak_day` | Shows whether load is cyclical or concentrated on specific weekdays. | Count executions by weekday, then pick the day with the highest frequency. |
+| `slow_views` | Concrete list of boards or views harming the user experience. | Views above the warning threshold, sorted by impact. |
+
+Workload score logic:
+
+- 60% from `slow_views_pct`
+- 40% from `top_app_pct`
+- `slow_views_pct` bands:
+  - `<= 5%` -> 100%
+  - `<= 10%` -> 85%
+  - `<= 20%` -> 70%
+  - `<= 30%` -> 50%
+  - `> 30%` -> 30%
+- `top_app_pct` bands:
+  - `<= 40%` -> 100%
+  - `<= 55%` -> 85%
+  - `<= 70%` -> 70%
+  - `<= 85%` -> 50%
+  - `> 85%` -> 30%
+- If no view data is available, the analyzer assigns a partial default rather than failing the full audit.
+
+### 5. AccessRightsAnalyzer
+
+This analyzer answers: **"How much of total compute is consumed by security logic?"**
+
+| Indicator | Why it matters | Calculation method |
+|-----------|----------------|--------------------|
+| `avg_execution_time_ms` | Baseline performance of ARM/UPM executions. | Mean of normalized security execution times. |
+| `pct_time_in_security` | Quantifies how much of the workspace compute budget is absorbed by access control logic. | `total_execution_time_ms / total_compute_time_ms * 100` when total compute is known. |
+| `slow_blocks` | Identifies security blocks that directly slow down recalculation. | Group ARM/UPM rows by block and flag blocks whose average execution time is above the slow threshold. |
+| `heavy_blocks` | Detects security blocks processing large row volumes. | Group ARM/UPM rows by block and flag blocks whose average computed rows exceed the heavy threshold. |
+| `frequent_recalc_blocks` | Finds security blocks that recalculate very often and can cascade through the model. | Group ARM/UPM rows by block and flag blocks whose execution count exceeds the frequency threshold. |
+| `time_buckets` | Helps separate small noise from severe security bottlenecks. | Bucket execution durations into `<1s`, `1-5s`, `5-30s`, and `>30s`. |
+| `scoping_opportunity` | Flags security rules that are likely broader than they need to be. | Set to true when unscoped security executions exist and their cumulative time exceeds 60000 ms. |
+
+Access-rights score logic:
+
+- Start at `100`
+- Deduct:
+  - `5` per slow block
+  - `5` per heavy block
+  - `3` per frequent recalculation block
+  - `5`, `10`, or `15` when `pct_time_in_security` exceeds `10%`, `20%`, or `30%`
+  - `10` per critical execution bucket entry (`>30s`)
+  - `10` per high-risk block
+  - `5` per medium-risk block
+
+### 6. DataQualityAnalyzer
+
+This analyzer answers: **"Can the workspace outputs be trusted, and are the underlying processes stable?"**
+
+#### 6.1 Freshness
+
+| Indicator | Why it matters | Calculation method |
+|-----------|----------------|--------------------|
+| `stale_metrics` | Identifies data flows that may no longer reflect current business reality. | For each metric, take the latest execution date and count metrics older than 7 days. |
+| `very_stale_metrics` | Separates severe freshness failures from mild lag. | Same logic, but count metrics older than 30 days. |
+| `avg_data_age_days` | Gives a global freshness signal for the dataset. | Average age in days derived from valid execution dates. |
+
+#### 6.2 Stability
+
+| Indicator | Why it matters | Calculation method |
+|-----------|----------------|--------------------|
+| `coefficient_of_variation` | Detects metrics whose runtime is unpredictable. | For each metric, compute `std(execution_time) / mean(execution_time)`. |
+| `highly_unstable_metrics` | Highlights the most operationally unreliable metrics. | Count metrics where coefficient of variation exceeds the configured high-instability threshold. |
+| `execution_time_trend` | Detects whether runtime is degrading or improving over time. | Compare the last two weekly averages; if the change exceeds 10%, classify as `degrading` or `improving`, else `stable`. |
+
+#### 6.3 Data Flow Health
+
+| Indicator | Why it matters | Calculation method |
+|-----------|----------------|--------------------|
+| `upsert_ratio` | Helps understand whether the model mostly updates existing rows or injects new data. | `total_upserted_rows / total_computed_rows`. |
+| `metrics_with_zero_rows` | Detects metrics that executed but produced no output rows. | Count distinct metrics with at least one execution where `computed_rows == 0`. |
+| `metrics_with_row_anomalies` | Detects intermittent flow failures rather than permanent zero-row behavior. | Count metrics where zero-row frequency is greater than 0% but less than 100%. |
+
+#### 6.4 Scenario Coverage
+
+| Indicator | Why it matters | Calculation method |
+|-----------|----------------|--------------------|
+| `total_scenarios` | Inventory of scenario usage. | Count distinct non-null scenario identifiers. |
+| `underutilized_scenarios` | Flags scenarios that exist but see very little real execution. | Scenarios whose share of executions is below the configured low-usage threshold. |
+| `scenario_imbalance_ratio` | Detects whether scenario usage is heavily skewed. | `max(execution_count) / min(execution_count)` across scenarios, when the minimum is non-zero. |
+
+#### 6.5 Change Velocity
+
+| Indicator | Why it matters | Calculation method |
+|-----------|----------------|--------------------|
+| `changes_per_day` | High change velocity often correlates with instability and incomplete validation. | Mean number of distinct `changeId` values per day. |
+| `change_trend` | Tells whether the pace of change is accelerating or slowing down. | Compare recent 7-day average changes per day versus the older 7-day average, with a 20% threshold. |
+
+#### 6.6 Batch Reliability
+
+| Indicator | Why it matters | Calculation method |
+|-----------|----------------|--------------------|
+| `batch_ratio` | Indicates how much of the workload is automated rather than interactive. | `batch_executions / total_executions`. |
+| `off_hours_executions_pct` | Off-hours execution is often expected for scheduled refreshes and overnight processes. | Share of executions occurring before 06:00 or after 20:00. |
+| `missing_batch_days` | Finds broken refresh schedules or process interruptions. | If batch behavior is material, list days with missing expected batch runs. |
+
+Trust score logic:
+
+- `data_quality_score` starts at `100`
+- Freshness deduction:
+  - `stale_only_pct * 0.5 + very_stale_pct * 1.0`, capped at `35`
+- Additional data-flow deductions:
+  - `-10` if zero-row metric share is high
+  - `-10` if row-anomaly share is high
+- `process_reliability_score` starts at `100`
+- Deduct for:
+  - unstable metrics
+  - degrading execution trend
+  - missing batch days
+  - underutilized scenarios
+  - severe scenario imbalance
+  - high change velocity
+- Final trust score:
+  - `(data_quality_score * 0.5) + (process_reliability_score * 0.5)`
+
+### 7. UsageAnalyzer
+
+This analyzer answers: **"Which user journeys matter most, and which of them are slow?"**
+
+| Indicator | Why it matters | Calculation method |
+|-----------|----------------|--------------------|
+| `top_boards` | Shows where users actually spend time. | Rank boards by `view_count` and keep the most viewed ones. |
+| `slow_popular_boards` | Finds high-traffic experience issues with clear business impact. | Boards with both significant usage and slow average load time. |
+| `power_users` | Identifies users who are most exposed to workflow friction. | Rank users by action count and flag those above the power-user threshold. |
+| `recent_imports` | Helps correlate recent imports with spikes in activity or slowness. | Keep recent audit events whose type matches import-related events. |
+| `critical_paths` | Produces an action-oriented list instead of only descriptive analytics. | Rule-based prioritization built from slow popular boards, import-heavy apps, and heavy-usage users. |
+| `priority_score` | Helps rank remediation order among slow popular boards. | `view_count * min(avg_load_time_ms / 1000, 10)`. |
+
+Usage outputs are primarily prioritization signals. Their purpose is to tell you **where** performance or governance problems hurt users most.
+
+### 8. VersionAnalyzer
+
+This analyzer answers: **"Is version management creating structural bloat or governance confusion?"**
+
+| Indicator | Why it matters | Calculation method |
+|-----------|----------------|--------------------|
+| `total_version_dimensions` | Measures how many versioned structures need active governance. | Count version dimensions returned by the Metadata API. |
+| `total_versions` | Indicates overall version volume. | Sum of members across all version dimensions. |
+| `total_active_versions` | Distinguishes active working versions from dormant history. | Sum of active members across all version dimensions. |
+| `archive_candidates` | Highlights versions likely safe to review for archival. | Members whose `created_at` date is older than 730 days. |
+| `versions_older_than_2y` | Tracks aging inside each version dimension. | Count members older than 2 years within the dimension. |
+| `naming_issues` | Detects version names that will make model use and maintenance harder. | A naming issue is flagged when the version name matches none of the accepted patterns and contains no digits. |
+| `high_risk_dimensions`, `medium_risk_dimensions` | Converts dimension hygiene into a governance risk summary. | Each dimension gets a risk score based on too many versions, old versions, and naming issues, then is bucketed into low, medium, or high. |
+
+Version score logic:
+
+- Start at `100`
+- Deduct:
+  - `15` per high-risk dimension
+  - `7` per medium-risk dimension
+  - `5` or `10` when total versions exceed `30` or `50`
+  - `5` or `10` when archive candidates exceed `5` or `10`
+
+### 9. PermissionAnalyzer
+
+This analyzer answers: **"Is access governance stable, proportionate, and actively reviewed?"**
+
+| Indicator | Why it matters | Calculation method |
+|-----------|----------------|--------------------|
+| `user_profiles` | Forms the base dataset for all governance checks. | Aggregate audit-log events by actor email and track actions, applications, blocks, imports, exports, admin activity, and permission activity. |
+| `admin_users` | Too many admins usually signals weak role design. | Users with at least one event categorized as an admin event. |
+| `power_users` | Heavy users are important for change management and control design. | Users whose total actions exceed the power-user threshold. |
+| `inactive_users` | Highlights accounts that may no longer need access. | Users whose last activity is more than 30 days old. |
+| `permission_changes_count` | High churn in permissions often indicates unstable governance or unclear roles. | Count of audit events whose type belongs to the permission-event list. |
+| `recent_permission_changes` | Provides the concrete audit trail behind the aggregate churn count. | Permission-related events are normalized into `granted`, `revoked`, or `modified` changes and sorted by timestamp. |
+| `broad_access_users` | Helps identify users with unusually wide application reach. | Users accessing at least 5 applications. |
+| `risks` | Converts raw behavior into actionable governance findings. | Rule-based risks: excessive admins, inactive users, broad access, high permission churn, or concentrated admin activity. |
+
+Permission score logic:
+
+- Start at `100`
+- Deduct by identified risk severity:
+  - `critical` -> `20`
+  - `high` -> `15`
+  - `medium` -> `8`
+  - `low` -> `3`
+- Cap risk-based deductions at `60`
+- Then deduct an additional:
+  - `5` if permission changes exceed `20`
+  - `10` if permission changes exceed `50`
 
 ---
 

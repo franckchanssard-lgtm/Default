@@ -395,29 +395,6 @@ class ReliabilityScorer:
             return f"{ms / 1_000:.1f}s"
         return f"{ms:.0f}ms"
 
-    # ── Action plan generation ────────────────────────────────────────────────
-
-        # Performance recommendations
-        perf = result.performance_result
-        if perf and perf.critical_count > 0:
-            recommendations.append(
-                f"🔴 CRITICAL: {perf.critical_count} metrics have execution time > 30s. "
-                "Review and optimize these immediately (decompose large formulas and reuse shared sub-calculations)."
-            )
-
-        if perf and perf.p95_execution_time_ms > 10000:
-            recommendations.append(
-                f"⚠️ P95 execution time is {perf.p95_execution_time_ms/1000:.1f}s. "
-                "Consider breaking complex calculations into smaller metrics and pre-computing constants."
-            )
-
-        # Scoping recommendations
-        scoping = result.scoping_result
-        if scoping and scoping.partially_scoped_pct > 30:
-            recommendations.append(
-                f"⚠️ {scoping.partially_scoped_pct:.0f}% of formula executions are partially scoped. "
-                "Refine scoping and apply modifiers in this order: FILTER/SELECT → BY (aggregation) → REMOVE → BY (allocation) → ADD."
-            )
     def _generate_action_plan(self, result: ReliabilityScore) -> ActionPlan:
         """Build a structured, sequenced action plan from all analysis results."""
 

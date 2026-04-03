@@ -334,8 +334,9 @@ class DataQualityAnalyzer:
             result.metrics_with_zero_rows = metrics_with_zeros
 
             # Find metrics that sometimes have 0 rows (anomalies)
-            metric_zero_pct = df.groupby('metric_id').apply(
-                lambda x: (x['computed_rows'] == 0).sum() / len(x) * 100
+            metric_zero_pct = (
+                df.groupby('metric_id')['computed_rows']
+                .agg(lambda s: (s == 0).mean() * 100)
             )
             anomalies = metric_zero_pct[(metric_zero_pct > 0) & (metric_zero_pct < 100)]
             result.metrics_with_row_anomalies = list(anomalies.head(10).index)

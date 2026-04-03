@@ -47,174 +47,376 @@ HTML_TEMPLATE = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pigment Reliability Audit</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap');
+
+        :root {
+            --bg: #f4f7fb;
+            --bg-soft: #edf2f8;
+            --surface: #ffffff;
+            --text: #101828;
+            --muted: #56607a;
+            --line: #d8e0ee;
+            --accent: #1f5fff;
+            --accent-2: #16b8a6;
+            --accent-soft: #e8efff;
+            --good: #17a34a;
+            --warn: #d69300;
+            --danger: #d63f3f;
+            --shadow: 0 24px 54px rgba(16, 24, 40, 0.09);
+        }
+
         * { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Manrope', 'Avenir Next', 'Helvetica Neue', sans-serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at 6% 8%, rgba(31, 95, 255, 0.11) 0, rgba(31, 95, 255, 0) 34%),
+                radial-gradient(circle at 94% 2%, rgba(22, 184, 166, 0.09) 0, rgba(22, 184, 166, 0) 30%),
+                linear-gradient(180deg, #f9fbff 0%, var(--bg) 42%, var(--bg-soft) 100%);
             min-height: 100vh;
-            padding: 2rem;
+            padding: 2.25rem 1rem 2.75rem;
+            position: relative;
+            overflow-x: hidden;
         }
-        .container { max-width: 960px; margin: 0 auto; }
-        h1 { color: white; text-align: center; margin-bottom: 0.5rem; font-size: 2.5rem; }
-        .subtitle { color: rgba(255,255,255,0.8); text-align: center; margin-bottom: 2rem; }
+
+        body::before,
+        body::after {
+            content: "";
+            position: fixed;
+            z-index: -1;
+            border-radius: 999px;
+            filter: blur(60px);
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        body::before {
+            width: 360px;
+            height: 360px;
+            background: rgba(31, 95, 255, 0.23);
+            top: -100px;
+            right: -90px;
+        }
+
+        body::after {
+            width: 300px;
+            height: 300px;
+            background: rgba(22, 184, 166, 0.18);
+            bottom: -120px;
+            left: -80px;
+        }
+
+        .container {
+            max-width: 1120px;
+            margin: 0 auto;
+        }
+
+        .hero {
+            margin: 0 auto 1.25rem;
+            border: 1px solid rgba(216, 224, 238, 0.8);
+            border-radius: 18px;
+            padding: 1.1rem 1.25rem 1.25rem;
+            background:
+              linear-gradient(115deg, rgba(31,95,255,0.08), rgba(22,184,166,0.07)),
+              rgba(255,255,255,0.86);
+            backdrop-filter: blur(2px);
+            box-shadow: var(--shadow);
+            animation: enter .45s ease;
+        }
+
+        .eyebrow {
+            display: inline-block;
+            border: 1px solid rgba(31, 95, 255, 0.28);
+            background: var(--accent-soft);
+            color: #1d3f95;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.09em;
+            font-weight: 700;
+            border-radius: 999px;
+            padding: 0.26rem 0.72rem;
+            margin-bottom: 0.55rem;
+        }
+
+        h1 {
+            font-family: 'Space Grotesk', 'Avenir Next', 'Helvetica Neue', sans-serif;
+            font-size: clamp(1.75rem, 1.7vw + 1.2rem, 2.6rem);
+            line-height: 1.08;
+            letter-spacing: -0.02em;
+            margin-bottom: 0.42rem;
+            color: #0e172b;
+        }
+
+        .subtitle {
+            font-size: 0.96rem;
+            line-height: 1.55;
+            color: var(--muted);
+            max-width: 780px;
+        }
+        .subtitle a {
+            color: #1d4ed8;
+            text-underline-offset: 2px;
+            font-weight: 600;
+        }
+
         .card {
-            background: white;
-            border-radius: 1rem;
-            padding: 2rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-        }
-        h2 {
-            color: #374151;
+            background: var(--surface);
+            border-radius: 18px;
+            border: 1px solid rgba(216, 224, 238, 0.82);
+            padding: 1.45rem 1.45rem 1.25rem;
             margin-bottom: 1rem;
+            box-shadow: var(--shadow);
+            animation: enter .45s ease;
+            animation-fill-mode: both;
+        }
+
+        .card:nth-of-type(2) { animation-delay: 0.06s; }
+
+        h2 {
+            color: #19233d;
+            margin-bottom: 0.95rem;
             display: flex;
             align-items: center;
             gap: 0.5rem;
+            font-family: 'Space Grotesk', 'Avenir Next', 'Helvetica Neue', sans-serif;
+            font-size: 1.2rem;
+            letter-spacing: -0.01em;
         }
+
         /* Upload zones */
         .upload-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 1rem;
-            margin-bottom: 1.25rem;
+            grid-template-columns: repeat(2, minmax(220px, 1fr));
+            gap: 0.86rem;
+            margin-bottom: 1rem;
         }
+
         .upload-zone {
-            border: 3px dashed #d1d5db;
-            border-radius: 0.75rem;
-            padding: 1.25rem;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            background: linear-gradient(180deg, #ffffff 0%, #f7f9fd 100%);
+            padding: 1rem 1rem 0.95rem;
             text-align: center;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
         }
+
         .upload-zone:hover, .upload-zone.dragover {
-            border-color: #667eea;
-            background: #f3f4ff;
+            border-color: rgba(31, 95, 255, 0.7);
+            background: #f4f8ff;
+            transform: translateY(-1px);
+            box-shadow: 0 8px 26px rgba(20, 39, 77, 0.09);
         }
+
         .upload-zone.uploaded {
-            border-color: #22c55e;
-            background: #f0fdf4;
+            border-color: rgba(23, 163, 74, 0.52);
+            background: #f2fcf5;
+            box-shadow: 0 8px 26px rgba(23, 163, 74, 0.12);
         }
+
         .upload-zone input { display: none; }
-        .upload-icon { font-size: 2rem; margin-bottom: 0.4rem; }
-        .upload-text { color: #6b7280; font-size: 0.875rem; }
-        .upload-filename { color: #22c55e; font-weight: 600; margin-top: 0.4rem; font-size: 0.8rem; }
-        .file-info { font-size: 0.75rem; color: #6b7280; }
+
+        .upload-icon {
+            width: 44px;
+            height: 44px;
+            margin: 0 auto 0.5rem;
+            border-radius: 999px;
+            border: 1px solid rgba(31, 95, 255, 0.32);
+            background: var(--accent-soft);
+            color: #214299;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            font-family: 'Space Grotesk', 'Avenir Next', 'Helvetica Neue', sans-serif;
+        }
+
+        .upload-text { color: var(--muted); font-size: 0.855rem; line-height: 1.35; }
+        .upload-text strong { color: #1b2640; }
+        .upload-filename { color: var(--good); font-weight: 700; margin-top: 0.48rem; font-size: 0.79rem; }
+        .file-info { font-size: 0.74rem; color: #6b7488; }
 
         /* Demo strip */
         .demo-strip {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            background: #fef3c7;
-            border: 1px solid #fcd34d;
-            border-radius: 0.75rem;
-            padding: 0.875rem 1.25rem;
-            margin-bottom: 1.25rem;
+            background: linear-gradient(90deg, #fff5e9 0%, #fff9ed 100%);
+            border: 1px solid #ffd7ad;
+            border-radius: 12px;
+            padding: 0.78rem 0.9rem;
+            margin-bottom: 0.92rem;
+            gap: 0.8rem;
         }
-        .demo-strip p { font-size: 0.875rem; color: #92400e; }
+
+        .demo-strip p { font-size: 0.84rem; color: #91511b; line-height: 1.4; }
+
         .btn-demo {
-            background: #f59e0b;
+            background: linear-gradient(135deg, #ff8b3d 0%, #ff6a3d 100%);
             color: white;
-            border: none;
-            padding: 0.5rem 1.25rem;
-            border-radius: 0.5rem;
+            border: 1px solid rgba(0,0,0,0.04);
+            padding: 0.52rem 0.95rem;
+            border-radius: 10px;
             font-weight: 600;
             cursor: pointer;
-            font-size: 0.875rem;
+            font-size: 0.79rem;
             white-space: nowrap;
-            transition: background 0.2s;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
         }
-        .btn-demo:hover { background: #d97706; }
+
+        .btn-demo:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 22px rgba(255, 106, 61, 0.33);
+        }
+
+        .btn-demo:disabled { opacity: 0.7; cursor: wait; }
 
         /* API section */
         .api-section {
-            margin-top: 1.25rem;
-            padding-top: 1.25rem;
-            border-top: 1px solid #e5e7eb;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--line);
         }
         .api-toggle {
             display: flex;
             align-items: center;
             gap: 0.75rem;
             cursor: pointer;
-            margin-bottom: 1rem;
+            margin-bottom: 0.8rem;
+            color: #1d2741;
+            font-weight: 600;
+            font-size: 0.92rem;
         }
+
         .api-toggle input { width: 1.25rem; height: 1.25rem; }
         .api-fields { display: none; }
         .api-fields.show { display: block; }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; font-weight: 500; margin-bottom: 0.25rem; color: #374151; }
+
+        .form-group { margin-bottom: 0.85rem; }
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.24rem;
+            color: #34415f;
+            font-size: 0.86rem;
+        }
+
         .form-group input {
-            width: 100%; padding: 0.75rem; border: 1px solid #d1d5db;
-            border-radius: 0.5rem; font-size: 1rem;
+            width: 100%;
+            padding: 0.7rem 0.75rem;
+            border: 1px solid var(--line);
+            border-radius: 9px;
+            font-size: 0.93rem;
+            color: #16233b;
+            background: #ffffff;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
         }
+
         .form-group input:focus {
-            outline: none; border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            outline: none;
+            border-color: rgba(31, 95, 255, 0.72);
+            box-shadow: 0 0 0 4px rgba(31, 95, 255, 0.12);
         }
-        .form-group small { color: #6b7280; font-size: 0.75rem; }
+
+        .form-group small { color: #637088; font-size: 0.76rem; }
 
         /* Run button */
         .btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white; border: none; padding: 1rem 2rem;
-            border-radius: 0.5rem; font-size: 1.1rem; font-weight: 600;
-            cursor: pointer; width: 100%;
-            transition: transform 0.2s, box-shadow 0.2s;
+            background: linear-gradient(105deg, var(--accent) 0%, #2350da 55%, var(--accent-2) 100%);
+            color: white;
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            padding: 0.88rem 1.15rem;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-weight: 700;
+            letter-spacing: 0.01em;
+            cursor: pointer;
+            width: 100%;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
         }
+
         .btn:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+            transform: translateY(-1px);
+            box-shadow: 0 11px 26px rgba(31, 95, 255, 0.32);
         }
+
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
         /* Results */
         #results { display: none; }
         #results.show { display: block; }
+
         .loading { text-align: center; padding: 2rem; }
         .spinner {
-            width: 50px; height: 50px; border: 4px solid #e5e7eb;
-            border-top-color: #667eea; border-radius: 50%;
+            width: 50px; height: 50px;
+            border: 4px solid #e8edf7;
+            border-top-color: var(--accent);
+            border-radius: 50%;
             animation: spin 1s linear infinite; margin: 0 auto 1rem;
         }
+
         @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes enter {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
 
         /* Score layout */
         .scores-top {
             display: grid;
             grid-template-columns: auto 1fr;
-            gap: 2rem;
+            gap: 1.65rem;
             align-items: start;
-            padding: 1.5rem 0;
+            padding: 1.1rem 0 0.7rem;
         }
         .grade-col { text-align: center; }
+
         .grade-circle {
-            width: 110px; height: 110px; border-radius: 50%;
+            width: 108px; height: 108px; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
-            font-size: 3rem; font-weight: bold; color: white;
+            font-size: 2.8rem; font-weight: bold; color: white;
             margin: 0 auto 0.5rem;
+            box-shadow: inset 0 -7px 18px rgba(0, 0, 0, 0.18), 0 8px 22px rgba(0, 0, 0, 0.16);
         }
+
         .grade-A, .grade-B { background: #22c55e; }
         .grade-C { background: #eab308; }
         .grade-D, .grade-F { background: #ef4444; }
-        .combined-label { font-size: 0.75rem; color: #6b7280; }
-        .combined-value { font-size: 1.75rem; font-weight: 800; color: #111827; }
+        .combined-label { font-size: 0.74rem; color: #60708a; }
+        .combined-value {
+            font-size: 1.72rem;
+            font-weight: 800;
+            color: #101928;
+            letter-spacing: -0.02em;
+        }
 
         /* Pillar grid */
         .pillars {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 0.75rem;
+            gap: 0.68rem;
         }
+
         .pillar {
-            background: #f9fafb;
-            border-radius: 0.5rem;
-            padding: 0.875rem 1rem;
+            background: #f7f9fd;
+            border: 1px solid #e5ebf5;
+            border-radius: 10px;
+            padding: 0.73rem 0.85rem;
         }
-        .pillar-label { font-size: 0.75rem; color: #6b7280; margin-bottom: 0.35rem; }
+
+        .pillar-label { font-size: 0.72rem; color: #6a758b; margin-bottom: 0.32rem; }
         .pillar-row { display: flex; align-items: center; gap: 0.5rem; }
-        .pillar-score { font-size: 1.3rem; font-weight: 700; min-width: 3.5rem; }
-        .prog-bar { flex: 1; height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; }
+
+        .pillar-score {
+            font-size: 1.26rem;
+            font-weight: 700;
+            min-width: 3.2rem;
+        }
+
+        .prog-bar { flex: 1; height: 8px; background: #e6ebf4; border-radius: 4px; overflow: hidden; }
         .prog-fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
         .col-green  { color: #16a34a; } .fill-green  { background: #22c55e; }
         .col-yellow { color: #ca8a04; } .fill-yellow { background: #eab308; }
@@ -224,9 +426,11 @@ HTML_TEMPLATE = """
         /* Trust badge */
         .trust-row {
             display: flex; align-items: center; gap: 0.75rem;
-            padding: 0.75rem 1rem; border-radius: 0.5rem;
-            background: #f3f4f6; margin-top: 0.75rem; font-size: 0.875rem;
+            padding: 0.7rem 0.85rem; border-radius: 10px;
+            background: #f4f7fb; margin-top: 0.7rem; font-size: 0.84rem;
+            border: 1px solid #e3eaf6;
         }
+
         .trust-badge {
             padding: 0.2rem 0.65rem; border-radius: 9999px;
             font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
@@ -241,11 +445,11 @@ HTML_TEMPLATE = """
         .warnings-box { margin-top: 0.75rem; }
         .warn-item {
             padding: 0.5rem 0.875rem; margin: 0.35rem 0;
-            background: #fef3c7; border-left: 3px solid #f59e0b;
-            border-radius: 0 0.375rem 0.375rem 0; font-size: 0.8rem; color: #92400e;
+            background: #fff4de; border-left: 3px solid #e8aa34;
+            border-radius: 0 0.375rem 0.375rem 0; font-size: 0.8rem; color: #8a5c18;
         }
         .warn-item.critical-warn {
-            background: #fee2e2; border-left-color: #ef4444; color: #991b1b;
+            background: #fee6e6; border-left-color: #ef4444; color: #991b1b;
         }
 
         /* Recommendations */
@@ -256,7 +460,7 @@ HTML_TEMPLATE = """
         }
         .recommendation {
             padding: 0.65rem 1rem; margin: 0.35rem 0;
-            background: #fef3c7; border-left: 4px solid #f59e0b;
+            background: #fff4de; border-left: 4px solid #e8aa34;
             border-radius: 0 0.5rem 0.5rem 0; font-size: 0.875rem;
         }
         .recommendation.critical { background: #fee2e2; border-left-color: #ef4444; }
@@ -265,46 +469,83 @@ HTML_TEMPLATE = """
         /* Downloads */
         .download-buttons { display: flex; gap: 1rem; margin-top: 1.5rem; }
         .btn-secondary {
-            background: #f3f4f6; color: #374151; flex: 1;
+            background: #f3f7fd; color: #2e3b57; flex: 1;
+            border: 1px solid #dce5f2;
             padding: 0.75rem 1rem; text-align: center; text-decoration: none;
             border-radius: 0.5rem; font-weight: 500; font-size: 0.9rem;
             transition: background 0.2s;
         }
-        .btn-secondary:hover { background: #e5e7eb; }
+        .btn-secondary:hover { background: #e8f0fd; }
+
         .error {
             background: #fee2e2; color: #dc2626;
             padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem;
         }
+
         .csv-req {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 0.75rem;
-            padding: 0.9rem 1.1rem;
-            margin-bottom: 1.25rem;
-            font-size: 0.85rem;
+            background: #f8fbff;
+            border: 1px solid #e1e8f4;
+            border-radius: 12px;
+            padding: 0.86rem 0.95rem;
+            margin-bottom: 0.95rem;
+            font-size: 0.82rem;
             color: #374151;
         }
-        .csv-req h3 { font-size: 0.9rem; margin-bottom: 0.5rem; color: #111827; }
+
+        .csv-req h3 {
+            font-size: 0.84rem;
+            margin-bottom: 0.4rem;
+            color: #15233d;
+            font-family: 'Space Grotesk', 'Avenir Next', 'Helvetica Neue', sans-serif;
+        }
+
         .csv-req code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.82rem; }
         .csv-req ul { margin-left: 1.1rem; }
         .csv-req li { margin: 0.2rem 0; }
+
+        @media (max-width: 920px) {
+            body { padding-top: 1.3rem; }
+            .container { max-width: 760px; }
+            .upload-grid { grid-template-columns: repeat(2, minmax(180px, 1fr)); }
+            .scores-top { grid-template-columns: 1fr; }
+            .grade-col { display: flex; align-items: center; justify-content: center; gap: 0.9rem; }
+            .grade-circle { margin: 0; width: 92px; height: 92px; font-size: 2.3rem; }
+        }
+
+        @media (max-width: 640px) {
+            body { padding: 1rem 0.8rem 1.4rem; }
+            .hero { padding: 0.9rem; border-radius: 14px; }
+            .card { padding: 1rem; border-radius: 14px; }
+            h1 { font-size: 1.52rem; }
+            .subtitle { font-size: 0.85rem; }
+            .upload-grid { grid-template-columns: 1fr; gap: 0.7rem; }
+            .demo-strip { flex-direction: column; align-items: flex-start; }
+            .btn-demo { width: 100%; text-align: center; }
+            .pillars { grid-template-columns: 1fr; }
+            .download-buttons { flex-direction: column; gap: 0.65rem; }
+            .grade-col { flex-direction: column; }
+            .grade-circle { margin-bottom: 0.25rem; }
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🔍 Pigment Reliability Audit</h1>
-        <p class="subtitle">
-            Upload your performance data to analyze workspace reliability
-            · <a href="/action-impact" style="color:#e0e7ff;text-decoration:underline">Open quick Action Impact UI</a>
-        </p>
+        <div class="hero">
+            <div class="eyebrow">Pigment Workspace Diagnostics</div>
+            <h1>Pigment Reliability Audit</h1>
+            <p class="subtitle">
+                Upload execution traces and audit logs to evaluate performance, trust, and governance across your workspace.
+                <a href="/action-impact">Open quick Action Impact UI</a>
+            </p>
+        </div>
 
         <div class="card">
-            <h2>📂 Upload CSV Files</h2>
+            <h2>Upload CSV Inputs</h2>
 
             <!-- Demo strip -->
             <div class="demo-strip">
-                <p>🎬 <strong>No data yet?</strong> Try the audit with a realistic 6-week demo dataset.</p>
-                <button class="btn-demo" onclick="loadDemo()">⚡ Load Demo Data</button>
+                <p><strong>No data yet?</strong> Start with a realistic six-week demo dataset to explore the full audit workflow.</p>
+                <button class="btn-demo" onclick="loadDemo()">Try Demo Dataset</button>
             </div>
 
             <div class="upload-grid">
@@ -312,7 +553,7 @@ HTML_TEMPLATE = """
                      onclick="document.getElementById('executions-input').click()">
                     <input type="file" id="executions-input" accept=".csv"
                            onchange="handleUpload(this, 'executions')">
-                    <div class="upload-icon">📊</div>
+                    <div class="upload-icon">EXE</div>
                     <div class="upload-text">
                         <strong>Executions CSV</strong> <span style="color:#ef4444">*</span><br>
                         <small>Metric execution performance</small>
@@ -325,7 +566,7 @@ HTML_TEMPLATE = """
                      onclick="document.getElementById('views-input').click()">
                     <input type="file" id="views-input" accept=".csv"
                            onchange="handleUpload(this, 'views')">
-                    <div class="upload-icon">👁️</div>
+                    <div class="upload-icon">VIEW</div>
                     <div class="upload-text">
                         <strong>Views CSV</strong><br>
                         <small>Board rendering performance</small>
@@ -338,7 +579,7 @@ HTML_TEMPLATE = """
                      onclick="document.getElementById('armset-input').click()">
                     <input type="file" id="armset-input" accept=".csv"
                            onchange="handleUpload(this, 'armset')">
-                    <div class="upload-icon">🔐</div>
+                    <div class="upload-icon">ARM</div>
                     <div class="upload-text">
                         <strong>Armset / UPM CSV</strong><br>
                         <small>Access rights executions</small>
@@ -349,12 +590,12 @@ HTML_TEMPLATE = """
 
                 <div class="upload-zone" id="auditlogs-zone"
                      onclick="document.getElementById('auditlogs-input').click()">
-                    <input type="file" id="auditlogs-input" accept=".csv"
+                    <input type="file" id="auditlogs-input" accept=".csv,.json"
                            onchange="handleUpload(this, 'auditlogs')">
-                    <div class="upload-icon">🧾</div>
+                    <div class="upload-icon">LOG</div>
                     <div class="upload-text">
-                        <strong>Audit Logs CSV</strong><br>
-                        <small>User activity and permissions</small>
+                        <strong>Audit Logs CSV / JSON</strong><br>
+                        <small>User activity, permissions, and action attribution</small>
                     </div>
                     <div class="upload-filename" id="auditlogs-filename"></div>
                     <div class="file-info" id="auditlogs-info"></div>
@@ -368,7 +609,7 @@ HTML_TEMPLATE = """
                     <li><b>Executions CSV (for action attribution)</b>: also include <code>changeId, executionStartedAt</code></li>
                     <li><b>Views CSV</b>: <code>app_id, blockId, blockName, execution_time</code></li>
                     <li><b>Armset CSV</b>: <code>app_id, app_name, blockId, blockName, execution_time, computed_rows</code></li>
-                    <li><b>Audit Logs CSV (optional)</b>: <code>event_id, event_timestamp, event_type, user_email, user_name, entity_id, entity_name, entity_application_id, entity_application_name</code></li>
+                    <li><b>Audit Logs CSV / JSON (optional)</b>: CSV exports or API-style JSON are both accepted for usage, permission, and action-attribution analysis.</li>
                 </ul>
                 <div class="file-info">If a required column is missing, the audit will return a CSV format error.</div>
             </div>
@@ -376,7 +617,7 @@ HTML_TEMPLATE = """
             <div class="api-section">
                 <label class="api-toggle">
                     <input type="checkbox" id="use-api" onchange="toggleApiFields()">
-                    <span>🔑 Enrich with Pigment API (optional)</span>
+                    <span>Enrich with Pigment API (optional)</span>
                 </label>
                 <div class="api-fields" id="api-fields">
                     <div class="form-group">
@@ -395,7 +636,7 @@ HTML_TEMPLATE = """
             </div>
 
             <button class="btn" id="run-btn" onclick="runAudit()" disabled>
-                🚀 Run Reliability Audit
+                Run Reliability Audit
             </button>
         </div>
 
@@ -437,10 +678,10 @@ HTML_TEMPLATE = """
 
                 <div class="download-buttons">
                     <a class="btn-secondary" id="download-html" href="#" target="_blank">
-                        📄 View Full Report
+                        Open HTML Report
                     </a>
                     <a class="btn-secondary" id="download-csv" href="#" download>
-                        📥 Download CSV
+                        Download Summary CSV
                     </a>
                 </div>
             </div>
@@ -510,7 +751,7 @@ HTML_TEMPLATE = """
         // ── Load demo data ───────────────────────────────────────────────────
         async function loadDemo() {
             const btn = document.querySelector('.btn-demo');
-            btn.textContent = '⏳ Loading…';
+            btn.textContent = 'Loading…';
             btn.disabled = true;
 
             try {
@@ -532,12 +773,13 @@ HTML_TEMPLATE = """
                 markZoneLoaded('executions', info.executions_name, info.executions_size);
                 if (info.views_name)  markZoneLoaded('views',  info.views_name,  info.views_size);
                 if (info.armset_name) markZoneLoaded('armset', info.armset_name, info.armset_size);
+                if (info.auditlogs_name) markZoneLoaded('auditlogs', info.auditlogs_name, info.auditlogs_size);
 
                 // Signal that demo mode is active
                 uploadedFiles['__demo__'] = true;
                 updateRunButton();
             } finally {
-                btn.textContent = '⚡ Load Demo Data';
+                btn.textContent = 'Try Demo Dataset';
                 btn.disabled = false;
             }
         }
@@ -558,7 +800,7 @@ HTML_TEMPLATE = """
 
             // Disable button for the duration of the request
             runBtn.disabled = true;
-            runBtn.textContent = '⏳ Analyzing…';
+            runBtn.textContent = 'Analyzing…';
 
             resultsDiv.classList.add('show');
             loading.style.display = 'block';
@@ -606,7 +848,7 @@ HTML_TEMPLATE = """
                 errorDiv.textContent = 'Error running audit: ' + err.message;
                 errorDiv.style.display = 'block';
             } finally {
-                runBtn.textContent = '🚀 Run Reliability Audit';
+                runBtn.textContent = 'Run Reliability Audit';
                 updateRunButton();   // re-enable if files still ready
             }
         }
@@ -1640,7 +1882,8 @@ def run_audit():
             armset_path = os.path.join(temp_dir, 'armset.csv')
             armset_file.save(armset_path)
         if audit_logs_file:
-            audit_logs_path = os.path.join(temp_dir, 'audit_logs.csv')
+            audit_ext = '.json' if audit_logs_file.filename.lower().endswith('.json') else '.csv'
+            audit_logs_path = os.path.join(temp_dir, f'audit_logs{audit_ext}')
             audit_logs_file.save(audit_logs_path)
 
         metadata_key = request.form.get('metadata_key', '').strip() or None
@@ -1674,12 +1917,16 @@ def demo_check():
     exec_path   = _DEMO_DIR / "Executions_demo.csv"
     views_path  = _DEMO_DIR / "Views_Executions_demo.csv"
     armset_path = _DEMO_DIR / "Armset_Upmset_Executions_demo.csv"
+    audit_logs_json = _DEMO_DIR / "Audit_Logs_demo.json"
+    audit_logs_csv = _DEMO_DIR / "Audit_Logs_demo.csv"
 
     if not exec_path.exists():
         return jsonify({'available': False})
 
     def kb(p):
         return round(p.stat().st_size / 1024, 1) if p.exists() else None
+
+    audit_logs_path = audit_logs_json if audit_logs_json.exists() else audit_logs_csv
 
     return jsonify({
         'available': True,
@@ -1689,6 +1936,8 @@ def demo_check():
         'views_size':  kb(views_path)   if views_path.exists()  else None,
         'armset_name': armset_path.name if armset_path.exists() else None,
         'armset_size': kb(armset_path)  if armset_path.exists() else None,
+        'auditlogs_name': audit_logs_path.name if audit_logs_path.exists() else None,
+        'auditlogs_size': kb(audit_logs_path) if audit_logs_path.exists() else None,
     })
 
 
@@ -1699,10 +1948,13 @@ def run_demo_audit():
         exec_path   = _DEMO_DIR / "Executions_demo.csv"
         views_path  = _DEMO_DIR / "Views_Executions_demo.csv"
         armset_path = _DEMO_DIR / "Armset_Upmset_Executions_demo.csv"
-        audit_logs_path = _DEMO_DIR / "Audit_Logs_demo.json"
+        audit_logs_json = _DEMO_DIR / "Audit_Logs_demo.json"
+        audit_logs_csv = _DEMO_DIR / "Audit_Logs_demo.csv"
 
         if not exec_path.exists():
             return jsonify({'error': 'Demo data not found. Run: python examples/demo/generate_demo.py'}), 404
+
+        audit_logs_path = audit_logs_json if audit_logs_json.exists() else audit_logs_csv
 
         result, err = _run_audit_from_paths(
             exec_path,

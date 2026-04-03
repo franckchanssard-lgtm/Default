@@ -137,6 +137,10 @@ summary { cursor: pointer; font-size: .84rem; font-weight: 600; color: #4b5563; 
 .glossary-item { font-size: .8rem; padding: .25rem 0; }
 .glossary-item b { color: #374151; }
 .glossary-item i { color: #6b7280; font-style: normal; }
+.kpi-intro { font-size: .8rem; color: #4b5563; line-height: 1.55; margin-bottom: .85rem; }
+.kpi-meta { font-size: .73rem; color: #6b7280; margin: .35rem 0 .75rem; }
+.kpi-rule { font-size: .76rem; color: #4b5563; line-height: 1.55; margin-top: .7rem; }
+.kpi-rule b { color: #111827; }
 
 h2 { scroll-margin-top: 3.5rem; }
 
@@ -425,6 +429,7 @@ class ReportGenerator:
   <a href="#complexity">Complexity</a>
   <a href="#workload">Workload</a>
   {nav_extra}
+  <a href="#kpi-methods">KPI Methods</a>
 </nav>
 
 {self._render_data_banner(score)}
@@ -440,6 +445,7 @@ class ReportGenerator:
   {self._render_trust_section(score) if has_trust else ''}
   {self._render_access_rights_section(score) if has_ar else ''}
   {self._render_change_impact_section(score) if has_change_impact else ''}
+  {self._render_kpi_methods()}
   {self._render_glossary()}
 </div>
 
@@ -1344,4 +1350,163 @@ class ReportGenerator:
       <div class="glossary-item"><b>Trust Level</b> <i>— HIGH / MEDIUM / LOW / CRITICAL based on data freshness and process reliability</i></div>
     </div>
   </details>
+</div>"""
+
+    def _render_kpi_methods(self) -> str:
+        """Explain why KPIs exist and how the main ones are calculated."""
+
+        sections = [
+            {
+                "name": "PerformanceAnalyzer",
+                "source": "Executions.csv (+ Views_Executions.csv for slow views)",
+                "question": "How slow are calculations, and how bad is the tail?",
+                "rows": [
+                    ("avg_execution_time_ms", "Baseline speed signal.", "Mean of the execution_time column."),
+                    ("p50 / p75 / p95 / p99", "Shows the runtime distribution, not just the average.", "Quantiles of execution_time. P75 is the main scoring input because it reflects repeated slowness."),
+                    ("critical_count / warning_count / watch_count", "Counts slow objects that require prioritization.", "Metrics or views are grouped first, their average time is computed, then they are bucketed against thresholds."),
+                    ("slow_metrics", "Concrete optimization backlog for formulas.", "Grouped by application, metric_id, metric_name with average, max, count, and total execution time."),
+                    ("slow_views", "Concrete optimization backlog for UX.", "Grouped by app_id, blockId, blockName with average, max, count, and total render time."),
+                ],
+                "logic": "Score starts from the <b>P75</b> band, then applies an extra penalty for critical objects. The intent is to capture repeated user pain, not hide it behind a low average.",
+            },
+            {
+                "name": "ScopingAnalyzer",
+                "source": "Executions.csv",
+                "question": "Are formulas recalculating more cells than necessary?",
+                "rows": [
+                    ("fully_scoped_count / partially_scoped_count / no_change_count", "Separates good scoping, improvable scoping, and informational no-op recalculations.", "Counts formula rows by scoped_level, restricted to jobType == Formula."),
+                    ("fully_scoped_pct / partially_scoped_pct", "Measures scoping quality where scoping actually applies.", "Computed on fully_scoped_count + partially_scoped_count only. NoChange and NonApplicable are excluded from that denominator."),
+                    ("no_change_pct", "Highlights recalculations that produced no output change.", "no_change_count / total_formula_executions * 100."),
+                    ("partially_scoped_total_time_ms", "Shows how much total compute is tied to formulas that still need scoping work.", "Sum of execution_time for PartiallyScoped formula executions."),
+                    ("partially_scoped_time_pct", "Main optimization KPI because it measures the share of total compute affected by poor scoping.", "partially_scoped_total_time_ms / total_formula_time_ms * 100."),
+                    ("potential_savings_ms", "Rough ROI estimate for scoping work.", "Heuristic estimate: partially_scoped_total_time_ms * 0.25."),
+                ],
+                "logic": "Score is driven primarily by <b>partially_scoped_time_pct</b>. This matters more than simple counts because one badly scoped metric can dominate total compute.",
+            },
+            {
+                "name": "ComplexityAnalyzer",
+                "source": "Executions.csv",
+                "question": "Is structural model complexity driving performance risk?",
+                "rows": [
+                    ("avg_dimensions / max_dimensions", "Shows average structural complexity and worst outlier depth.", "Metrics are deduplicated first, then nb_dims is aggregated."),
+                    ("dims_distribution", "Tells whether high complexity is isolated or widespread.", "Frequency distribution of deduplicated metric dimension counts."),
+                    ("dims_time_correlation", "Tests whether dimensions are materially associated with slowness.", "Correlation between dimension count and average execution time when enough data exists."),
+                    ("dims_rows_correlation", "Tests whether dimensions are associated with row explosion.", "Correlation between dimension count and average computed rows."),
+                    ("critical_count / warning_count / watch_count", "Turns structural complexity into a prioritized risk inventory.", "Counts deduplicated metrics above configured dimension thresholds."),
+                ],
+                "logic": "Complexity score combines three components: structural complexity share (50%), dimension-to-time correlation (30%), and average dimensions level (20%).",
+            },
+            {
+                "name": "WorkloadAnalyzer",
+                "source": "Views_Executions.csv",
+                "question": "Where is interactive load concentrated, and how much of it is slow?",
+                "rows": [
+                    ("slow_views_pct", "Measures how much of the UI experience is perceptibly slow.", "Percentage of view executions above the configured warning threshold."),
+                    ("top_app_pct", "Detects concentration risk where one application absorbs most user-facing compute.", "Group view executions by application, sum execution time per app, then divide the heaviest app time by total view time."),
+                    ("apps_by_workload", "Application-level prioritization list.", "Per app: sum, mean, count, distinct metrics, and share of total time."),
+                    ("hourly_distribution / peak_hour", "Helps identify concurrency hotspots.", "Count executions by hour of day and select the hour with the highest frequency."),
+                    ("daily_distribution / peak_day", "Shows weekday concentration patterns.", "Count executions by weekday and select the day with the highest frequency."),
+                ],
+                "logic": "Workload score is a weighted blend: <b>60%</b> from slow_views_pct and <b>40%</b> from top_app_pct.",
+            },
+            {
+                "name": "AccessRightsAnalyzer",
+                "source": "Armset_Upmset.csv",
+                "question": "How much of total compute is consumed by security logic?",
+                "rows": [
+                    ("avg_execution_time_ms", "Baseline performance of ARM/UPM calculations.", "Mean of normalized security execution times."),
+                    ("pct_time_in_security", "Quantifies the share of compute budget consumed by access control logic.", "total_execution_time_ms / total_compute_time_ms * 100 when total compute is known."),
+                    ("slow_blocks", "Identifies security blocks that directly slow recalculation.", "Group ARM/UPM rows by block and flag blocks whose average execution time exceeds the slow threshold."),
+                    ("heavy_blocks", "Finds security blocks processing large row volumes.", "Group ARM/UPM rows by block and flag blocks whose average computed rows exceed the heavy threshold."),
+                    ("frequent_recalc_blocks", "Finds security blocks that cascade often through the model.", "Group ARM/UPM rows by block and flag blocks whose execution count exceeds the frequency threshold."),
+                    ("scoping_opportunity", "Flags likely over-broad security logic.", "True when unscoped security executions exist and their cumulative time exceeds 60000 ms."),
+                ],
+                "logic": "Score starts at 100 and deducts points for slow blocks, heavy blocks, frequent recalculations, high % of compute in security, and high-risk block patterns.",
+            },
+            {
+                "name": "DataQualityAnalyzer",
+                "source": "Executions.csv",
+                "question": "Can the workspace outputs be trusted, and are the underlying processes stable?",
+                "rows": [
+                    ("stale_metrics / very_stale_metrics", "Detects data flows that may no longer reflect current business reality.", "For each metric, take the latest execution date and count metrics older than 7 or 30 days."),
+                    ("avg_data_age_days", "Global freshness signal.", "Average age in days derived from valid execution dates."),
+                    ("coefficient_of_variation", "Measures runtime unpredictability.", "For each metric: std(execution_time) / mean(execution_time)."),
+                    ("execution_time_trend", "Shows whether runtime is degrading or improving.", "Compare the last two weekly averages and classify when the change exceeds 10%."),
+                    ("upsert_ratio", "Shows whether flows mostly update existing rows or inject new ones.", "total_upserted_rows / total_computed_rows."),
+                    ("metrics_with_zero_rows / metrics_with_row_anomalies", "Detects broken or intermittent data flow behavior.", "Count metrics with zero-row executions and metrics whose zero-row frequency is between 0% and 100%."),
+                    ("total_scenarios / underutilized_scenarios / scenario_imbalance_ratio", "Checks whether scenarios are used consistently.", "Count distinct scenarios, flag low-share scenarios, and compute max/min execution imbalance."),
+                    ("changes_per_day / change_trend", "High model change velocity often correlates with instability.", "Mean distinct changeId values per day, plus recent-vs-older 7-day comparison."),
+                    ("batch_ratio / off_hours_executions_pct / missing_batch_days", "Checks refresh process reliability.", "Ratio of batch executions, share of off-hours runs, and missing expected batch days."),
+                ],
+                "logic": "Final trust score is <b>50% data quality</b> and <b>50% process reliability</b>. Freshness, instability, missing batch days, scenario imbalance, and high change velocity all reduce trust.",
+            },
+            {
+                "name": "UsageAnalyzer",
+                "source": "Audit Logs API or Audit_Logs.csv",
+                "question": "Which user journeys matter most, and which of them are slow?",
+                "rows": [
+                    ("top_boards", "Shows where users actually spend time.", "Rank boards by view_count."),
+                    ("slow_popular_boards", "Finds high-traffic experience issues with clear business impact.", "Boards with both significant usage and slow average load time."),
+                    ("power_users", "Identifies users most exposed to workflow friction.", "Users above the action-count threshold."),
+                    ("recent_imports", "Helps correlate recent imports with load or slowness.", "Recent audit events whose type matches import-related events."),
+                    ("critical_paths", "Produces an action-oriented list instead of only descriptive analytics.", "Rule-based prioritization from slow popular boards, import-heavy apps, and heavy-usage users."),
+                    ("priority_score", "Ranks slow popular boards by remediation urgency.", "view_count * min(avg_load_time_ms / 1000, 10)."),
+                ],
+                "logic": "Usage outputs are prioritization signals. Their purpose is to tell you where performance or governance problems hurt users most.",
+            },
+            {
+                "name": "VersionAnalyzer",
+                "source": "Metadata API",
+                "question": "Is version management creating structural bloat or governance confusion?",
+                "rows": [
+                    ("total_version_dimensions / total_versions / total_active_versions", "Measures the size of version governance scope.", "Count version dimensions, then sum members and active members across them."),
+                    ("archive_candidates", "Highlights versions likely safe to review for archival.", "Members whose created_at date is older than 730 days."),
+                    ("versions_older_than_2y", "Tracks aging inside each version dimension.", "Count members older than 2 years within the dimension."),
+                    ("naming_issues", "Detects unclear names that make model use and maintenance harder.", "Flag names that match none of the accepted patterns and contain no digits."),
+                    ("high_risk_dimensions / medium_risk_dimensions", "Summarizes version hygiene as governance risk.", "Each dimension gets a risk score from excessive version count, old versions, and naming issues."),
+                ],
+                "logic": "Version score starts at 100 and deducts points for high-risk dimensions, medium-risk dimensions, too many total versions, and too many archive candidates.",
+            },
+            {
+                "name": "PermissionAnalyzer",
+                "source": "Audit Logs API or Audit_Logs.csv",
+                "question": "Is access governance stable, proportionate, and actively reviewed?",
+                "rows": [
+                    ("user_profiles", "Base dataset for all governance checks.", "Aggregate audit events by actor email and track actions, applications, blocks, imports, exports, admin events, and permission events."),
+                    ("admin_users", "Too many admins usually signal weak role design.", "Users with at least one event categorized as an admin event."),
+                    ("power_users", "Heavy users are important for change management and control design.", "Users above the total action threshold."),
+                    ("inactive_users", "Highlights accounts that may no longer need access.", "Users whose last activity is more than 30 days old."),
+                    ("permission_changes_count / recent_permission_changes", "High churn in permissions often indicates unstable governance.", "Count and normalize permission-related audit events into granted, revoked, or modified changes."),
+                    ("broad access risks", "Helps identify users with unusually wide application reach.", "Users accessing at least 5 applications are flagged for broad-access review."),
+                    ("risks", "Converts raw behavior into actionable governance findings.", "Rule-based risks: excessive admins, inactive users, broad access, high permission churn, or concentrated admin activity."),
+                ],
+                "logic": "Permission score starts at 100, deducts by risk severity, caps risk deductions at 60, then applies an additional penalty for high permission-change volume.",
+            },
+        ]
+
+        cards = []
+        for section in sections:
+            rows_html = "".join(
+                f"<tr><td><code>{indicator}</code></td><td>{why}</td><td>{how}</td></tr>"
+                for indicator, why, how in section["rows"]
+            )
+            cards.append(
+                f"""<details>
+  <summary>{section["name"]} — why and how metrics are calculated</summary>
+  <div class="kpi-meta"><b>Source:</b> {section["source"]} &nbsp;·&nbsp; <b>Question answered:</b> {section["question"]}</div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Indicator</th><th>Why it exists</th><th>Calculation method</th></tr></thead>
+    <tbody>{rows_html}</tbody>
+  </table></div>
+  <p class="kpi-rule"><b>Scoring / interpretation logic:</b> {section["logic"]}</p>
+</details>"""
+            )
+
+        return f"""<div class="card" id="kpi-methods">
+  <div class="section-title">🧮 KPI Definitions &amp; Calculation Method</div>
+  <p class="kpi-intro">
+    This section explains why each KPI exists and how it is computed in the audit engine.
+    Some outputs are raw measurements, some are ratios, and some are rule-based heuristics used to turn the raw data into a score or a prioritized finding.
+  </p>
+  {''.join(cards)}
 </div>"""
