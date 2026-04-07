@@ -1,0 +1,20 @@
+{
+  "name": "local-pigment",
+  "interface": {
+    "displayName": "Local Pigment Plugins"
+  },
+  "plugins": [
+    {
+      "name": "pigment-modeler",
+      "source": {
+        "source": "local",
+        "path": "./plugins/pigment-modeler"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

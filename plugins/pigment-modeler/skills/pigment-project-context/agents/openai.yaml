@@ -1,0 +1,3 @@
+interface:
+  display_name: "Pigment Project Context"
+  short_description: "Load workspace-specific Pigment conventions and constraints"

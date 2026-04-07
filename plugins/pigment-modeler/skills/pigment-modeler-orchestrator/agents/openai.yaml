@@ -1,0 +1,3 @@
+interface:
+  display_name: "Pigment Modeler Orchestrator"
+  short_description: "Plan and execute Pigment MCP modeling tasks safely"

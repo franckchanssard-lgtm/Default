@@ -1,0 +1,38 @@
+{
+  "name": "pigment-modeler",
+  "version": "0.1.0",
+  "description": "Custom Pigment MCP plugin for safe model building with project-specific skills",
+  "author": {
+    "name": "Franck Chanssard",
+    "url": "https://github.com/franckchanssard-lgtm"
+  },
+  "homepage": "https://github.com/franckchanssard-lgtm/Default/tree/sam-modeler/plugins/pigment-modeler",
+  "repository": "https://github.com/franckchanssard-lgtm/Default",
+  "license": "UNLICENSED",
+  "keywords": [
+    "pigment",
+    "mcp",
+    "modeling",
+    "planning"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Pigment Modeler",
+    "shortDescription": "Build Pigment models through MCP with safer custom skills",
+    "longDescription": "A repo-local Pigment modeling plugin that combines Pigment MCP access, opinionated orchestration, and workspace-specific guidance for building and evolving applications safely.",
+    "developerName": "Franck Chanssard",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/franckchanssard-lgtm/Default",
+    "defaultPrompt": [
+      "Inspect this Pigment app and propose a safer modeling plan.",
+      "Create dimensions and metrics for a new planning workflow.",
+      "Refactor this Pigment model while preserving naming and folder rules."
+    ],
+    "brandColor": "#0065FF"
+  }
+}
